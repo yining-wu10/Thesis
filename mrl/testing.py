@@ -258,7 +258,8 @@ def training_value_error(
 ):  # Length of forecast. The error is computed on v_h = \sum_{t=h}^H v_t
     # if h = -1, we forecast the whole path
     E_v = 0
-    P_df, R_df = get_MDP(df_new)
+    if stochastic: P_df, R_df = get_MDP_stochastic(df_new)
+    else: P_df, R_df = get_MDP(df_new)
     df2 = df_new.reset_index()
     df2 = df2.groupby(["ID"]).first()
     N_train = df2.shape[0]
