@@ -202,7 +202,7 @@ def get_MDP_stochastic(df_new):
     ) #DEBUG
 
     R_df = df_new.groupby("CLUSTER")["RISK"].mean()
-    R_df = pd.concat([R_df, pd.Series([0], index=[s])], axis=1).T #DEBUG
+#    R_df = pd.concat([R_df, pd.Series([0], index=[s])], axis=1).T #DEBUG
 
     return P_df, R_df
 
@@ -313,17 +313,6 @@ def training_value_error(
                 # only calculate v_true on the first iteration
                 if i == 0:
                     v_true = gamma * v_true + df_new["RISK"].loc[index + t]
-                print("s =", s)
-                print("type(s) =", type(s))
-                
-                print("R_df:")
-                print(R_df.head())
-                
-                print("R_df.index:")
-                print(R_df.index)
-                
-                print("index type:")
-                print(type(R_df.index[0]))
                 v_estim = gamma * v_estim + R_df.loc[s]
 
                 # this tells us if the path is over
