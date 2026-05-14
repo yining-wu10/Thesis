@@ -67,8 +67,11 @@ class DataGenerator(object):
                 this_from_state_idx = mdp.state.get_state_idx(
                         idx_type=output_state_idx_type).astype(int)
 
+                # Calculate reward of current state s
+                current_state_reward = mdp.calculateReward()
+                
                 # Take the action, new state is property of the MDP
-                step_reward = mdp.transition(step_action)
+                mdp.transition(step_action)
                 this_to_state_idx = mdp.state.get_state_idx(
                         idx_type=output_state_idx_type).astype(int)
 
@@ -81,12 +84,18 @@ class DataGenerator(object):
                 emp_r_mat[this_action_idx,
                        this_from_state_idx, this_to_state_idx] += step_reward
 
-                if step_reward != 0:
-                    iter_rewards[itr, step, 0] = step_reward
+                # Record R(s) for each step
+                iter_rewards[itr, step, 0] = current_state_reward
+
+                # Stop if s is absorbing state
+                if current_state_reward != 0:
                     iter_lengths[itr, 0] = step+1
                     break
 
+            # Record R(s) for the final state
             if step == max_num_steps-1:
                 iter_lengths[itr, 0] = max_num_steps
+                final_state_reward = mdp.calculateReward()
+                iter_rewards[itr, max_num_steps-1, 0] = final_state_reward
 
         return iter_states, iter_actions, iter_lengths, iter_rewards, iter_component, emp_tx_mat, emp_r_mat
