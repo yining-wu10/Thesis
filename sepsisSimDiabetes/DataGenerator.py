@@ -30,7 +30,7 @@ class DataGenerator(object):
         # corresponding to None
         iter_states = np.ones((num_iters, max_num_steps+1, 1), dtype=int)*(-1)
         iter_actions = np.ones((num_iters, max_num_steps, 1), dtype=int)*(-1)
-        iter_rewards = np.zeros((num_iters, max_num_steps, 1))
+        iter_rewards = np.zeros((num_iters, max_num_steps+1, 1))
         iter_lengths = np.zeros((num_iters, 1), dtype=int)
 
         # Record diabetes, the hidden mixture component
@@ -60,42 +60,39 @@ class DataGenerator(object):
             iter_component[itr, :] = this_diabetic_idx  # Never changes
             iter_states[itr, 0, 0] = mdp.state.get_state_idx(
                     idx_type=output_state_idx_type)
+            # Record reward of the initial state
+            iter_rewards[itr, 0, 0] = mdp.calculateReward()
+            
             for step in range(max_num_steps):
                 step_action = mdp.select_actions()
 
                 this_action_idx = step_action.get_action_idx().astype(int)
                 this_from_state_idx = mdp.state.get_state_idx(
                         idx_type=output_state_idx_type).astype(int)
-
-                # Calculate reward of current state s
-                current_state_reward = mdp.calculateReward()
                 
                 # Take the action, new state is property of the MDP
-                mdp.transition(step_action)
+                step_reward = mdp.transition(step_action)
                 this_to_state_idx = mdp.state.get_state_idx(
                         idx_type=output_state_idx_type).astype(int)
 
                 iter_actions[itr, step, 0] = this_action_idx
                 iter_states[itr, step+1, 0] = this_to_state_idx
+                # Record reward of（s_{t+1}）in step+1 
+                iter_rewards[itr, step+1, 0] = step_reward
 
                 # Record in transition matrix
                 emp_tx_mat[this_action_idx,
                        this_from_state_idx, this_to_state_idx] += 1
                 emp_r_mat[this_action_idx,
-                       this_from_state_idx, this_to_state_idx] += current_state_reward
-
-                # Record R(s) for each step
-                iter_rewards[itr, step, 0] = current_state_reward
+                       this_from_state_idx, this_to_state_idx] += step_reward
 
                 # Stop if s is absorbing state
-                if current_state_reward != 0:
+                if step_reward != 0:
                     iter_lengths[itr, 0] = step+1
                     break
 
-            # Record R(s) for the final state
+            # Stop if reaching max num steps
             if step == max_num_steps-1:
                 iter_lengths[itr, 0] = max_num_steps
-                final_state_reward = mdp.calculateReward()
-                iter_rewards[itr, max_num_steps-1, 0] = final_state_reward
 
         return iter_states, iter_actions, iter_lengths, iter_rewards, iter_component, emp_tx_mat, emp_r_mat
