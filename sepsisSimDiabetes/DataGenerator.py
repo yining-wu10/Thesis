@@ -82,7 +82,7 @@ class DataGenerator(object):
                 emp_tx_mat[this_action_idx,
                        this_from_state_idx, this_to_state_idx] += 1
                 emp_r_mat[this_action_idx,
-                       this_from_state_idx, this_to_state_idx] += step_reward
+                       this_from_state_idx, this_to_state_idx] += current_state_reward
 
                 # Record R(s) for each step
                 iter_rewards[itr, step, 0] = current_state_reward
