@@ -462,9 +462,10 @@ class MDP_model:
         3. Min purity: We check whether the vast majority of data points indeed had the same transition with the given action. 
             We compare the ratio to a treshold.
         """
-        if self.stochastic == stochastic,
-            self.create_PR_stochastic()
-        else self.create_PR(alpha, beta, min_action_obs, min_action_purity, prob)
+        if self.stochastic:
+            self.create_PR_stochastic(min_action_obs, prob)
+        else:
+            self.create_PR(alpha, beta, min_action_obs, min_action_purity, prob)
         return self.solve_helper(gamma, epsilon, p, prob)
 
 
