@@ -491,9 +491,11 @@ class MDP_model:
         P_df = P_df.reset_index()
         R_df = R_df.reset_index()
 
-        print("\n===== create_PR_stochastic =====")
-        print("P_df columns:")
-        print(P_df.columns)
+        raise RuntimeError(
+            f"\nP_df columns: {list(P_df.columns)}\n"
+            f"P_df head:\n{P_df.head(10)}\n"
+            f"P_df dtypes:\n{P_df.dtypes}"
+        )
 
         # record parameters of transition dataframe
         a = P_df["ACTION"].nunique()
