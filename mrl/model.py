@@ -46,6 +46,7 @@ class MDP_model:
         # where transitions that do not pass the action and purity thresholds
         # now lead to a new cluster with high negative reward
         self.R = None  # R_df but in matrix form of R[a, s]
+        self.stochastic = False
 
     def load_df(self, df_clustered, pfeatures, opt_k=None):
         """"
@@ -60,7 +61,7 @@ class MDP_model:
         self.pfeatures = pfeatures
         self.df_trained = df_clustered.copy()
         self.opt_k = opt_k
-
+        self.stochastic=False
         self.create_model()
 
     def get_info(self):
@@ -297,6 +298,7 @@ class MDP_model:
         self.df = df
         self.pfeatures = pfeatures
         self.eta = eta
+        self.stochastic = stochastic
         self.t_max = df["TIME"].max()
         self.r_max = abs(df["RISK"]).max()
 
@@ -515,7 +517,7 @@ class MDP_model:
             c = row.CLUSTER
             u = row.ACTION
             t = row.NEXT_CLUSTER
-            p = row.prob
+            p = row.probability
             P[u, c, t] = p
 
         # reinsert transition for cluster/action pairs taken out by count threshold
