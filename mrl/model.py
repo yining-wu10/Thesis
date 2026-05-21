@@ -397,7 +397,7 @@ class MDP_model:
             self.R_df = R_df
 
             # nc_predictability is used for robustness
-            self.nc_predictability = next_cluster_predictability(self.df_trained,)
+            self.nc_predictability = next_cluster_predictability(self.df_trained)
 
     # predict() takes a list of features and a time horizon, and returns
     # the predicted value after all actions are taken in order
