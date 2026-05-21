@@ -524,6 +524,9 @@ class MDP_model:
             u = row.ACTION
             t = row.NEXT_CLUSTER
             p = row.PROBABILITY
+            print(type(c), c)
+            print(type(u), u)
+            print(type(t), t)
             P[u, c, t] = p
 
         # reinsert transition for cluster/action pairs taken out by count threshold
