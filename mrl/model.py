@@ -462,8 +462,110 @@ class MDP_model:
         3. Min purity: We check whether the vast majority of data points indeed had the same transition with the given action. 
             We compare the ratio to a treshold.
         """
-        self.create_PR(alpha, beta, min_action_obs, min_action_purity, prob)
+        if self.stochastic == stochastic,
+            self.create_PR_stochastic()
+        else self.create_PR(alpha, beta, min_action_obs, min_action_purity, prob)
         return self.solve_helper(gamma, epsilon, p, prob)
+
+
+#------------------- Stochastic MRL -------------------#
+def create_PR_stochastic(self, min_action_obs, prob):
+
+        """
+        
+        """
+        
+        # if default value, then scale the min threshold with data size, ratio 0.008
+        if min_action_obs == -1:
+            min_action_obs = max(5, 0.008 * self.df_trained.shape[0])
+
+        # adding two clusters: one for sink node (reward = 0), one for punishment state
+        # sink node is R[s-2], punishment state is R[s-1]
+
+        P_df = self.P_df.copy()
+        R_df = self.R_df.copy()
+        P_df["count"] = self.nc_predictability["count"]
+        P_df = P_df.reset_index()
+        R_df = R_df.reset_index()
+
+        # record parameters of transition dataframe
+        a = P_df["ACTION"].nunique()
+        s = P_df["CLUSTER"].nunique()
+        actions = P_df["ACTION"].unique()
+
+        # Take out rows where actions or purity below threshold
+        P_thresh = P_df.loc[(P_df["count"] > min_action_obs)]
+
+        # Take note of rows where we have missing actions:
+        action_counts = P_df.groupby("CLUSTER")["ACTION"].nunique()
+        incomplete_clusters = action_counts[action_counts < a].index
+        missing_pairs = []
+        for c in incomplete_clusters:
+            observed_actions = P_df.loc[P_df["CLUSTER"] == c, "ACTION"].unique()
+            not_present = np.setdiff1d(actions, observed_actions)
+            for u in not_present:
+                missing_pairs.append((c, u))
+
+    
+        P = np.zeros((a, s + 1, s + 1))
+
+        # model stochastic transitions
+        for row in P_thresh.itertuples():
+            c = row.CLUSTER
+            u = row.ACTION
+            t = row.NEXT_CLUSTER
+            p = row.prob
+            P[u, c, t] = p
+
+        # reinsert transition for cluster/action pairs taken out by count threshold
+        excl = P_df.loc[P_df["count"] <= min_action_obs]
+
+        for row in excl.itertuples():
+            c = row.CLUSTER
+            u = row.ACTION
+
+            # clear possible partial probability vector
+            P[u, c, :] = 0
+            P[u, c, -1] = 1
+
+        # reinsert transition for missing cluster-action pairs
+        for c, u in missing_pairs:
+            P[u, c, :] = 0
+            P[u, c, -1] = 1
+
+        # replacing correct sink node transitions
+        nan = P_df.loc[P_df["count"].isnull()]
+        for row in nan.itertuples():
+            c = row.CLUSTER
+            u = row.ACTION
+            t = row.NEXT_CLUSTER
+            P[u, c, :] = 0
+            P[u, c, t] = 1
+    
+        # punishment node to 0 reward sink
+        # Assumes terminal ("End") states exist. Otherwise define a valid transition for punishment (self-loop or explicit sink state) so P rows sum to 1.
+        if "End" in self.df_trained["NEXT_CLUSTER"].unique():
+            for u in range(a):
+                P[u, -1, -2] = 1
+
+        # append high negative reward for incorrect transitions
+        R = []
+
+        T_max = self.df_trained["TIME"].max()
+        r_max = abs(self.df_trained["RISK"]).max()
+        self.t_max = T_max
+        self.r_max = r_max
+        for i in range(a):
+            if prob == "max":
+                # take T-max * max(abs(reward)) * 2
+                R.append(np.append(np.array(self.R_df), -self.t_max * self.r_max * 2))
+            else:
+                R.append(np.append(np.array(self.R_df), self.t_max * self.r_max * 2))
+        R = np.array(R)
+
+        self.P = P
+        self.R = R
+
 
 #------------------- Deterministic MRL -------------------#
     def create_PR(self, alpha, beta, min_action_obs, min_action_purity, prob):
