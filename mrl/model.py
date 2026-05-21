@@ -470,7 +470,7 @@ class MDP_model:
 
 
 #------------------- Stochastic MRL -------------------#
-def create_PR_stochastic(self, min_action_obs, prob):
+    def create_PR_stochastic(self, min_action_obs, prob):
 
         """
         
