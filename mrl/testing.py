@@ -670,16 +670,20 @@ def next_clusters(df):
     return df_final
 
 
-def next_cluster_predictability(df):  # , regressor):  TODO: seems incomplete, ask about
+def next_cluster_predictability(df):  
     """
     Generates the necessary statistics for predicting the next cluster
-    1. Counts the number of observations taking a given (clus, action) pair
-    2. Fits a classification model to predict the next cluster based on the features,
-    the loss function (e.g. Hinge Loss, for Lipschitz conditions) 
+    Counts the number of observations taking a given (clus, action) pair
+    Returns:
+        count(c,a): number of observations for this cluster-action pair
     """
     df = df.loc[df["NEXT_CLUSTER"] != "None"]
-    df_final = df.groupby(["CLUSTER", "ACTION"])["RISK"].count()
-    # df_final.reset_index(inplace=True) TODO: ask about bug
+    df_final = (
+        df.groupby(["CLUSTER", "ACTION"])["RISK"]
+        .count()
+        .to_frame(name="count")
+    )
+    df_final.reset_index(inplace=True)
     return df_final
 
 
