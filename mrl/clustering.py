@@ -473,10 +473,10 @@ def split_postlabel(
         cluster_update(df, ids, k + cluster_index - 1)
     # ===== debug =====
     print("------")
-    print("init cluster:", i)
+    print("init cluster:", init_cluster)
     print(
     "old cluster size:",
-    (df["CLUSTER"]==i).sum())
+    (df["CLUSTER"]==init_cluster).sum())
     print(
     "new cluster size:",
     (df["CLUSTER"]==k).sum())
