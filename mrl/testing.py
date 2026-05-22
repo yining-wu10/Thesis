@@ -141,6 +141,7 @@ def generate_colormap(number_of_distinct_colors: int = 80):
 # get_MDP() takes in a clustered dataframe df_new, and returns dataframes
 # P_df and R_df that represent the parameters of the estimated MDP (if sink
 # exists, it will be the last cluster and goes to itself)
+# DEBUG: TODO (refer to updated get_MDP_stochastic)
 def get_MDP(df_new):
     # print('df_new orig getMDP', df_new)
     # removing None values when counting where clusters go
@@ -177,14 +178,13 @@ def get_MDP_stochastic(df_new):
     P_df now represented as c,a,c' -> p
     R_df is still c -> r
     Where c is current cluster, a is action take, c' next cluster, r reward, and p probability
+    In this dataset, terminal transitions are marked by NEXT_CLUSTER == "None". Map "None" to a new absorbing sink state s.
     """
-    df0 = df_new[df_new["NEXT_CLUSTER"] != "None"]
-
-    s = df0["CLUSTER"].max() + 1
-    df0.loc[df0["NEXT_CLUSTER"] == "End", "NEXT_CLUSTER"] == s
-    actions = df0[df0["NEXT_CLUSTER"] != s]["ACTION"].unique()
-
+    df0 = df_new[df_new["NEXT_CLUSTER"] != "None"].copy()
+    
+    # count transitions: count(c, a, c')
     transition_counts = df0.groupby(["CLUSTER", "ACTION", "NEXT_CLUSTER"]).size()
+    # normalize within each (c, a): p(c' | c, a)
     transition_df = (
         transition_counts / transition_counts.groupby(["CLUSTER", "ACTION"]).sum()
     )
@@ -193,20 +193,43 @@ def get_MDP_stochastic(df_new):
     P_df["PROBABILITY"] = transition_df
     P_df = P_df.reset_index()
 
-    df_end = []
-    for a in actions:
-        df_end.append([s, a, s, 1])
-    P_df = pd.concat(
-    [P_df, pd.DataFrame(df_end, columns=["CLUSTER", "ACTION", "NEXT_CLUSTER", "PROBABILITY"])],
-    ignore_index=True
-    ) #DEBUG
-
     R_df = df_new.groupby("CLUSTER")["RISK"].mean()
+
+    # terminal clusters are those whose NEXT_CLUSTER is None
+    cs = df_new.loc[
+        df_new["NEXT_CLUSTER"] == "None", "CLUSTER"
+    ].astype(int).unique()
+
+    # add zero-reward sink only if terminal clusters exist
+    if len(cs) > 0:
+        s = int(df_new["CLUSTER"].max()) + 1
+        actions = (
+            df0["ACTION"]
+            .astype(int)
+            .unique()
+        )
+
+        df_end = []
+
+        for a in actions:
+            # terminal cluster -> sink
+            for c in cs:
+                df_end.append([int(c), int(a), s, 1.0])
+            # sink -> sink
+            df_end.append([s, int(a), s, 1.0])
+
+        df_end = pd.DataFrame(
+            df_end,
+            columns=["CLUSTER", "ACTION", "NEXT_CLUSTER", "PROBABILITY"]
+        )
+
+        P_df = pd.concat([P_df, df_end], ignore_index=True)
+        R_df = pd.concat([R_df, pd.Series([0], index=[s])])
 #    R_df = pd.concat([R_df, pd.Series([0], index=[s])], axis=1).T #DEBUG
 
     return P_df, R_df
 
-
+# TODO: DEBUG (Only apply to deterministic)
 def add_sink(P_df_noend, cs, R_df):
     """Add a sink node to the transition functions"""
     # create dataframe that goal go to sink and sink go to sink
