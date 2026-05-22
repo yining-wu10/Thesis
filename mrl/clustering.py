@@ -472,6 +472,7 @@ def split_postlabel(
         ).all(), "trying to reassign cluster to points out of original cluster"
         cluster_update(df, ids, k + cluster_index - 1)
     # ===== debug =====
+    """
     print("------")
     print("init cluster:", init_cluster)
     print(
@@ -483,7 +484,7 @@ def split_postlabel(
     print(
     "current labels:",
     sorted(df["CLUSTER"].unique()))
-
+    """
     # print(i,a,c)
     # print(df.groupby(['CLUSTER', 'NEXT_CLUSTER']).count())
     # raise Exception
