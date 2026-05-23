@@ -181,7 +181,7 @@ def get_MDP_stochastic(df_new):
     df0 = df_new[df_new["NEXT_CLUSTER"] != "None"]
 
     s = df0["CLUSTER"].max() + 1
-    df0.loc[df0["NEXT_CLUSTER"] == "End", "NEXT_CLUSTER"] == s
+    df0.loc[df0["NEXT_CLUSTER"] == "End", "NEXT_CLUSTER"] = s
     actions = df0[df0["NEXT_CLUSTER"] != s]["ACTION"].unique()
 
     transition_counts = df0.groupby(["CLUSTER", "ACTION", "NEXT_CLUSTER"]).size()
