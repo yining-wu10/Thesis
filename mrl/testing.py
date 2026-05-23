@@ -202,7 +202,7 @@ def get_MDP_stochastic(df_new):
     ) #DEBUG
 
     R_df = df_new.groupby("CLUSTER")["RISK"].mean()
-#    R_df = pd.concat([R_df, pd.Series([0], index=[s])], axis=1).T #DEBUG
+    R_df = pd.concat([R_df, pd.Series([0], index=[s])])
 
     return P_df, R_df
 
