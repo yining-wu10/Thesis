@@ -202,7 +202,7 @@ def get_MDP_stochastic(df_new):
 
     # add zero-reward sink only if terminal clusters exist
     if len(cs) > 0:
-        s = df_new["CLUSTER"].max()) + 1
+        s = df_new["CLUSTER"].max() + 1
         actions = (
             df0["ACTION"]
             .unique()
