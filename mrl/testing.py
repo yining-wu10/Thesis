@@ -198,14 +198,13 @@ def get_MDP_stochastic(df_new):
     # terminal clusters are those whose NEXT_CLUSTER is None
     cs = df_new.loc[
         df_new["NEXT_CLUSTER"] == "None", "CLUSTER"
-    ].astype(int).unique()
+    ].unique()
 
     # add zero-reward sink only if terminal clusters exist
     if len(cs) > 0:
-        s = int(df_new["CLUSTER"].max()) + 1
+        s = df_new["CLUSTER"].max()) + 1
         actions = (
             df0["ACTION"]
-            .astype(int)
             .unique()
         )
 
@@ -214,9 +213,9 @@ def get_MDP_stochastic(df_new):
         for a in actions:
             # terminal cluster -> sink
             for c in cs:
-                df_end.append([int(c), int(a), s, 1.0])
+                df_end.append([c, a, s, 1.0])
             # sink -> sink
-            df_end.append([s, int(a), s, 1.0])
+            df_end.append([s, a, s, 1.0])
 
         df_end = pd.DataFrame(
             df_end,
