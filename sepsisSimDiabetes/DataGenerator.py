@@ -29,12 +29,12 @@ class DataGenerator(object):
         # Set the default value of states / actions to negative -1,
         # corresponding to None
         iter_states = np.ones((num_iters, max_num_steps+1, 1), dtype=int)*(-1)
-        iter_actions = np.ones((num_iters, max_num_steps, 1), dtype=int)*(-1)
+        iter_actions = np.ones((num_iters, max_num_steps+1, 1), dtype=int)*(-1)
         iter_rewards = np.zeros((num_iters, max_num_steps+1, 1))
         iter_lengths = np.zeros((num_iters, 1), dtype=int)
 
         # Record diabetes, the hidden mixture component
-        iter_component = np.zeros((num_iters, max_num_steps, 1), dtype=int)
+        iter_component = np.zeros((num_iters, max_num_steps +1, 1), dtype=int)
         mdp = MDP(init_state_idx=None, # Random initial state
                   policy_array=policy, policy_idx_type=policy_idx_type,
                   p_diabetes=p_diabetes)
@@ -58,6 +58,7 @@ class DataGenerator(object):
             mdp.state = mdp.get_new_state()
             this_diabetic_idx = mdp.state.diabetic_idx
             iter_component[itr, :] = this_diabetic_idx  # Never changes
+            
             iter_states[itr, 0, 0] = mdp.state.get_state_idx(
                     idx_type=output_state_idx_type)
             # Record reward of the initial state
@@ -86,13 +87,16 @@ class DataGenerator(object):
                 emp_r_mat[this_action_idx,
                        this_from_state_idx, this_to_state_idx] += step_reward
 
-                # Stop if s is absorbing state
+                # Stop if s_{t+1} is absorbing state
                 if step_reward != 0:
                     iter_lengths[itr, 0] = step+1
                     break
 
             # Stop if reaching max num steps
-            if step == max_num_steps-1:
+            else:
                 iter_lengths[itr, 0] = max_num_steps
+                final_action = mdp.select_actions()
+                final_action_idx = final_action.get_action_idx().astype(int)
+                iter_actions[itr, max_num_steps, 0] = final_action_idx
 
         return iter_states, iter_actions, iter_lengths, iter_rewards, iter_component, emp_tx_mat, emp_r_mat
