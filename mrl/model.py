@@ -475,22 +475,73 @@ class MDP_model:
     def create_PR_stochastic(self, min_action_obs, prob):
 
         """
-        
+        Construct stochastic transition matrix P and reward matrix R.
+        Expected self.P_df columns:
+            CLUSTER, ACTION, NEXT_CLUSTER, PROBABILITY
+        Expected self.nc_predictability columns:
+            CLUSTER, ACTION, count
+            
+        Notes:
+            - self.P_df may contain non-contiguous cluster labels due to split failures.
+            - This function locally remaps state labels to consecutive indices.
+            - The remapping is kept local to this function so it can be removed easily
+              if splitter is later fixed.
         """
+        def remap_state_indices(P_df, R_df):
+            """
+            Remap state labels in P_df and R_df to consecutive integers.
+            Input:
+                P_df columns: CLUSTER, ACTION, NEXT_CLUSTER, PROBABILITY
+                R_df: index = original cluster/state labels, value = reward
+            Output:
+                P_df_remap: CLUSTER and NEXT_CLUSTER remapped to 0,1,...,n-1
+                R_df_remap: index remapped to 0,1,...,n-1
+                state_map: old_state -> new_state
+                inverse_state_map: new_state -> old_state
+            """
+        
+            P_df = P_df.copy()
+            R_df = R_df.copy()
+        
+            all_states = sorted(
+                set(P_df["CLUSTER"].astype(int))
+                | set(P_df["NEXT_CLUSTER"].astype(int))
+                | set(R_df.index.astype(int))
+            )
+        
+            state_map = {old: new for new, old in enumerate(all_states)}
+            inverse_state_map = {new: old for old, new in state_map.items()}
+        
+            P_df["CLUSTER"] = P_df["CLUSTER"].astype(int).map(state_map)
+            P_df["NEXT_CLUSTER"] = P_df["NEXT_CLUSTER"].astype(int).map(state_map)
+        
+            R_df = R_df.rename(index=state_map).sort_index()
+        
+            return P_df, R_df, state_map, inverse_state_map
+
+        
         
         # if default value, then scale the min threshold with data size, ratio 0.008
         if min_action_obs == -1:
             min_action_obs = max(5, 0.008 * self.df_trained.shape[0])
 
-        # adding two clusters: one for sink node (reward = 0), one for punishment state
-        # sink node is R[s-2], punishment state is R[s-1]
-
         P_df = self.P_df.copy()
         R_df = self.R_df.copy()
-        P_df["count"] = self.nc_predictability["count"]
-        P_df = P_df.reset_index()
-        R_df = R_df.reset_index()
+        P_df = P_df.merge(
+            self.nc_predictability,
+            on=["CLUSTER", "ACTION"],
+            how="left"
+        )
 
+        # locally remap non-contiguous state labels
+        P_df, R_df, state_map, inverse_state_map = remap_state_indices(P_df, R_df)
+        
+        # store mapping for interpretation/debugging
+        self.state_map = state_map
+        self.inverse_state_map = inverse_state_map
+        
+        P_df = P_df.reset_index(drop=True)
+        
         # raise RuntimeError(
         #    f"\nP_df columns: {list(P_df.columns)}\n"
         #    f"P_df head:\n{P_df.head(10)}\n"
@@ -499,8 +550,14 @@ class MDP_model:
 
         # record parameters of transition dataframe
         a = P_df["ACTION"].nunique()
-        s = P_df["CLUSTER"].nunique()
+        s = len(R_df)
         actions = P_df["ACTION"].unique()
+
+        # safety checks after remapping
+        assert P_df["CLUSTER"].max() < s
+        assert P_df["NEXT_CLUSTER"].max() < s
+        assert set(P_df["CLUSTER"]).issubset(set(R_df.index))
+        assert set(P_df["NEXT_CLUSTER"]).issubset(set(R_df.index))
 
         # Take out rows where actions or purity below threshold
         P_thresh = P_df.loc[(P_df["count"] > min_action_obs)]
@@ -524,9 +581,6 @@ class MDP_model:
             u = row.ACTION
             t = row.NEXT_CLUSTER
             p = row.PROBABILITY
-            print(type(c), c)
-            print(type(u), u)
-            print(type(t), t)
             P[u, c, t] = p
 
         # reinsert transition for cluster/action pairs taken out by count threshold
@@ -535,7 +589,6 @@ class MDP_model:
         for row in excl.itertuples():
             c = row.CLUSTER
             u = row.ACTION
-
             # clear possible partial probability vector
             P[u, c, :] = 0
             P[u, c, -1] = 1
@@ -567,16 +620,21 @@ class MDP_model:
         r_max = abs(self.df_trained["RISK"]).max()
         self.t_max = T_max
         self.r_max = r_max
+
+        # use remapped R_df, not self.R_df
+        base_R = np.array(R_df)
         for i in range(a):
             if prob == "max":
                 # take T-max * max(abs(reward)) * 2
-                R.append(np.append(np.array(self.R_df), -self.t_max * self.r_max * 2))
+                R.append(np.append(base_R, -self.t_max * self.r_max * 2))
             else:
-                R.append(np.append(np.array(self.R_df), self.t_max * self.r_max * 2))
+                R.append(np.append(base_R, self.t_max * self.r_max * 2))
         R = np.array(R)
 
         self.P = P
         self.R = R
+
+
 
 
 #------------------- Deterministic MRL -------------------#
