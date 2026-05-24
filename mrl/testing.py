@@ -181,13 +181,15 @@ def get_MDP_stochastic(df_new):
     df0 = df_new[df_new["NEXT_CLUSTER"] != "None"]
 
     s = df0["CLUSTER"].max() + 1
-    df0.loc[df0["NEXT_CLUSTER"] == "End", "NEXT_CLUSTER"] = s
-    actions = df0[df0["NEXT_CLUSTER"] != s]["ACTION"].unique()
-
-    transition_counts = df0.groupby(["CLUSTER", "ACTION", "NEXT_CLUSTER"]).size()
+    cs = df0.loc[df0["NEXT_CLUSTER"] == "End", "CLUSTER"].unique()
+    df_trans = df0.loc[(df0["NEXT_CLUSTER"] != "End")].copy()
+    actions = df_trans["ACTION"].unique()
+    
+    transition_counts = df_trans.groupby(["CLUSTER", "ACTION", "NEXT_CLUSTER"]).size()
     transition_df = (
         transition_counts / transition_counts.groupby(["CLUSTER", "ACTION"]).sum()
     )
+
 
     P_df = pd.DataFrame()
     P_df["PROBABILITY"] = transition_df
@@ -195,11 +197,18 @@ def get_MDP_stochastic(df_new):
 
     df_end = []
     for a in actions:
+        for c in cs:
+            df_end.append([c, a, s, 1])
         df_end.append([s, a, s, 1])
-    P_df = pd.concat(
-    [P_df, pd.DataFrame(df_end, columns=["CLUSTER", "ACTION", "NEXT_CLUSTER", "PROBABILITY"])],
-    ignore_index=True
-    ) #DEBUG
+    if len(df_end) > 0:
+        df_end = pd.DataFrame(
+            df_end,
+            columns=["CLUSTER", "ACTION", "NEXT_CLUSTER", "PROBABILITY"]
+        )
+        P_df = pd.concat(
+            [P_df, df_end],
+            ignore_index=True
+        ) #DEBUG
 
     R_df = df_new.groupby("CLUSTER")["RISK"].mean()
     R_df = pd.concat([R_df, pd.Series([0], index=[s])])
