@@ -103,11 +103,11 @@ def mrl_model_to_prob_array(
     return policy_array
 
 
+"""
+?
+Compute discounted return for each generated trajectory.
+"""
 def compute_returns(iter_rewards, iter_lengths, gamma=1.0):
-    """
-    Compute discounted return for each generated trajectory.
-    """
-
     returns = []
 
     num_iters = iter_rewards.shape[0]
@@ -125,6 +125,13 @@ def compute_returns(iter_rewards, iter_lengths, gamma=1.0):
     return np.array(returns)
 
 
+
+"""
+Use DataGenerator to generate trajectories under policy_array and estimate mean policy value.
+Returns:
+   value: mean trajectory return
+   returns: return of each simulated trajectory
+"""
 def estimate_policy_value(
     policy_array,
     num_iters,
@@ -134,11 +141,6 @@ def estimate_policy_value(
     output_state_idx_type="obs",
     p_diabetes=0.2,
 ):
-    """
-    Use DataGenerator to generate trajectories under policy_array
-    and estimate mean policy value.
-    """
-
     dgen = DataGenerator()
 
     (
@@ -156,7 +158,8 @@ def estimate_policy_value(
         policy_idx_type=policy_idx_type,
         p_diabetes=p_diabetes,
         output_state_idx_type=output_state_idx_type,
-        use_tqdm=False,
+        use_tqdm=use_tqdm,
+        tqdm_desc=tqdm_desc,
     )
 
     returns = compute_returns(
@@ -168,36 +171,58 @@ def estimate_policy_value(
     return np.mean(returns), returns
 
 
+
+"""
+Compute value gaps between MRL policies and a baseline policy.
+
+Parameters
+----------
+    models: List of trained MRL models.
+    baseline_pi: Deterministic baseline policy - baseline_pi[state_idx] = action_idx
+    num_states:
+        Number of states corresponding to idx_type:
+            idx_type="obs"      -> State.NUM_OBS_STATES
+            idx_type="proj_obs" -> State.NUM_PROJ_OBS_STATES
+            idx_type="full"     -> State.NUM_FULL_STATES
+    num_iters: Number of simulated trajectories per policy.
+    max_num_steps: Maximum trajectory length.
+    idx_type:
+        Determines both:
+            1. how state_idx is decoded into features
+            2. which state index type DataGenerator uses for policy lookup
+    diabetic_idx:
+        Used only for decoding obs/proj_obs state indices into State objects.
+        Ignored for full state indices.
+    gamma: Discount factor.
+    p_diabetes: Initial diabetes probability used by DataGenerator.
+    use_median: If True, compare median returns instead of mean returns.
+
+Returns
+-------
+    v_alg: List of value gaps, one per MRL model.
+    """
 def value_diff_sepsis_datagen(
     models,
     baseline_pi,
     num_states,
     num_iters,
     max_num_steps,
-    state_to_features=None,
+    idx_type="obs",
+    diabetic_idx=0,
     gamma=1.0,
-    policy_idx_type="obs",
-    output_state_idx_type="obs",
     p_diabetes=0.2,
     use_median=False,
+    use_tqdm=False,
 ):
-    """
-    Compute policy value gaps using DataGenerator.
+    assert idx_type in ["obs", "proj_obs", "full"]
 
-    baseline_pi:
-        deterministic policy vector:
-            baseline_pi[state] = action_idx
-
-    Returns:
-        v_alg:
-            list of value gaps, one per MRL model
-    """
-
-    v_alg = []
+    policy_idx_type = idx_type
+    output_state_idx_type = idx_type
+    num_actions = Action.NUM_ACTIONS_TOTAL
 
     baseline_policy_array = deterministic_pi_to_prob_array(
         pi=baseline_pi,
-        num_actions=8,
+        num_actions=num_actions,
     )
 
     baseline_value, baseline_returns = estimate_policy_value(
@@ -208,9 +233,15 @@ def value_diff_sepsis_datagen(
         policy_idx_type=policy_idx_type,
         output_state_idx_type=output_state_idx_type,
         p_diabetes=p_diabetes,
+        use_tqdm=use_tqdm,
+        tqdm_desc="baseline policy",
     )
 
-    for model in models:
+            
+
+    v_alg = []
+
+    for i, model in enumerate(models):
 
         if model.pi is None:
             model.solve_MDP(gamma=gamma, epsilon=1e-4)
@@ -218,8 +249,9 @@ def value_diff_sepsis_datagen(
         mrl_policy_array = mrl_model_to_prob_array(
             model=model,
             num_states=num_states,
-            state_to_features=state_to_features,
-            num_actions=8,
+            idx_type=idx_type,
+            diabetic_idx=diabetic_idx,
+            num_actions=num_actions,
         )
 
         mrl_value, mrl_returns = estimate_policy_value(
@@ -230,6 +262,8 @@ def value_diff_sepsis_datagen(
             policy_idx_type=policy_idx_type,
             output_state_idx_type=output_state_idx_type,
             p_diabetes=p_diabetes,
+            use_tqdm=use_tqdm,
+            tqdm_desc=f"MRL model {i}",
         )
 
         if use_median:
