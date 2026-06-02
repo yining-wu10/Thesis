@@ -1,17 +1,64 @@
 import numpy as np
+from sepsisSimDiabetes.State import State
+from sepsisSimDiabetes.Action import Action
+from sepsisSimDiabetes.DataGenerator import DataGenerator
 
 
 
+"""
+Decode simulator state index into MRL classifier features.
+idx_type="obs":
+            return 7-dimensional observed features:
+            [hr, sysbp, percoxyg, glucose, antibiotic, vaso, vent]
+idx_type="proj_obs":
+            return 7-dimensional observed features.
+            In State.py, glucose is set to normal level 2.
+idx_type="full":
+            return 8-dimensional full features:
+            [diabetic_idx, hr, sysbp, percoxyg, glucose, antibiotic, vaso, vent]
 
-def deterministic_pi_to_prob_array(pi, num_actions=8):
-    """
-    Convert deterministic policy:
+Parameters
+----------
+state_idx: Integer state index.
+idx_type: "obs", "proj_obs", or "full".
+diabetic_idx:
+        Only used when idx_type is "obs" or "proj_obs".
+        Ignored when idx_type is "full".
+"""
+def state_idx_to_features(state_idx, idx_type="obs", diabetic_idx=0):
+    assert idx_type in ["obs", "proj_obs", "full"]
+
+    if idx_type == "full":
+        state = State(
+            state_idx=int(state_idx),
+            idx_type="full",
+            diabetic_idx=None,
+        )
+
+        obs_features = state.get_state_vector().astype(int)
+
+        return np.concatenate([
+            np.array([int(state.diabetic_idx)]),
+            obs_features,
+        ])
+
+    state = State(
+        state_idx=int(state_idx),
+        idx_type=idx_type,
+        diabetic_idx=int(diabetic_idx),
+    )
+
+    return state.get_state_vector().astype(int)
+
+
+"""
+Convert deterministic policy:
         pi[state] = action_idx
-
-    into probability policy:
+into probability policy:
         policy_array[state, action] = probability
-    """
-
+DataGenerator requires a probability vector over actions for each state.
+"""
+def deterministic_pi_to_prob_array(pi, num_actions=8):
     num_states = len(pi)
     policy_array = np.zeros((num_states, num_actions))
 
@@ -22,36 +69,36 @@ def deterministic_pi_to_prob_array(pi, num_actions=8):
     return policy_array
 
 
+
+
+"""
+Convert learned MRL model policy into DataGenerator-compatible policy array.
+For each original simulator state:
+        state_idx
+        -> features via state_idx_to_features()
+        -> cluster via model.m.predict()
+        -> action via model.pi[cluster]
+        -> one-hot probability distribution over actions
+"""
 def mrl_model_to_prob_array(
     model,
     num_states,
-    state_to_features=None,
+    idx_type="obs",
+    diabetic_idx=0,
     num_actions=8,
 ):
-    """
-    Convert a learned MRL model into a DataGenerator-compatible policy array.
-
-    For each original state:
-        state_idx
-        -> features
-        -> cluster
-        -> model.pi[cluster]
-        -> one-hot action probability
-    """
-
     policy_array = np.zeros((num_states, num_actions))
 
     for state_idx in range(num_states):
-
-        if state_to_features is None:
-            features = np.array([state_idx])
-        else:
-            features = state_to_features(state_idx)
+        features = state_idx_to_features(
+            state_idx=state_idx,
+            idx_type=idx_type,
+            diabetic_idx=diabetic_idx,
+        )
 
         cluster = int(model.m.predict([features])[0])
-        action = int(model.pi[cluster])
-
-        policy_array[state_idx, action] = 1.0
+        action_idx = int(model.pi[cluster])
+        policy_array[state_idx, action_idx] = 1.0
 
     return policy_array
 
