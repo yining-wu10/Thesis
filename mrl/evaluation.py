@@ -140,6 +140,8 @@ def estimate_policy_value(
     policy_idx_type="obs",
     output_state_idx_type="obs",
     p_diabetes=0.2,
+    use_tqdm=False,
+    tqdm_desc="",
 ):
     dgen = DataGenerator()
 
