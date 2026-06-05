@@ -185,6 +185,7 @@ def get_MDP_stochastic(df_new):
     df_trans = df0.loc[(df0["NEXT_CLUSTER"] != "End")].copy()
     actions = df_trans["ACTION"].unique()
 
+    '''
     print("DEBUG df0 ACTION counts:")
     print(df0["ACTION"].value_counts(dropna=False))
 
@@ -196,6 +197,7 @@ def get_MDP_stochastic(df_new):
 
     print("DEBUG rows where ACTION == 'None' in df_trans:")
     print(df_trans[df_trans["ACTION"] == "None"][["CLUSTER", "ACTION", "NEXT_CLUSTER", "RISK"]].head(20))
+    '''
     
     transition_counts = df_trans.groupby(["CLUSTER", "ACTION", "NEXT_CLUSTER"]).size()
     transition_df = (
