@@ -201,7 +201,7 @@ Returns
 -------
     v_alg: List of value gaps, one per MRL model.
     """
-def value_diff_sepsis_datagen(
+def value_diff(
     models,
     baseline_pi,
     num_states,
