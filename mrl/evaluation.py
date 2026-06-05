@@ -104,7 +104,6 @@ def mrl_model_to_prob_array(
 
 
 """
-?
 Compute discounted return for each generated trajectory.
 """
 def compute_returns(iter_rewards, iter_lengths, gamma=1.0):
@@ -114,7 +113,7 @@ def compute_returns(iter_rewards, iter_lengths, gamma=1.0):
 
     for i in range(num_iters):
         T_i = int(iter_lengths[i, 0])
-        rewards_i = iter_rewards[i, :T_i, 0]
+        rewards_i = iter_rewards[i, :T_i +1, 0]
 
         G = 0.0
         for t, reward in enumerate(rewards_i):
