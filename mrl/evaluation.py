@@ -5,6 +5,84 @@ from sepsisSimDiabetes.DataGenerator import DataGenerator
 
 
 
+
+
+"""
+Convert DataGenerator outputs into long-format DataFrame.
+Output columns:
+        ID, TIME, FEATURE_0..., ACTION, RISK
+Rules:
+        - Each row corresponds to one state-time pair.
+        - FEATURE_* is decoded from state_idx.
+        - ACTION is aligned with the same time step.
+        - If ACTION == -1, it is converted to string "None".
+        - RISK is aligned with the same time step.
+
+idx_type:
+        "obs"  -> FEATURE_0...FEATURE_6
+        "full" -> FEATURE_0...FEATURE_7, while FEATURE_0=diabetic_idx
+"""
+def dg_to_long_df_feature(
+    iter_states,
+    iter_actions,
+    iter_lengths,
+    iter_rewards,
+    iter_component,
+    idx_type="obs"
+):
+    assert idx_type in ["obs", "proj_obs", "full"]
+
+    rows = []
+    n_traj = iter_states.shape[0]
+
+    for traj_id in range(n_traj):
+        length = int(iter_lengths[traj_id, 0])
+
+        if idx_type == "full":
+            diabetic_idx = None
+        else:
+            diabetic_idx = int(iter_component[traj_id, 0, 0])
+
+        for t in range(length+1):
+            state_idx = int(iter_states[traj_id, t, 0])
+            reward_t = float(iter_rewards[traj_id, t, 0])
+
+            raw_action = int(iter_actions[traj_id, t, 0])
+            action_idx = "None" if raw_action == -1 else raw_action
+
+            features = state_idx_to_features(
+                state_idx=state_idx,
+                idx_type=idx_type,
+                diabetic_idx=diabetic_idx,
+                )
+
+            row = {
+                "ID": traj_id,
+                "TIME": t,
+                "ACTION": action_idx,
+                "RISK": reward_t
+            }
+
+            for j, val in enumerate(features):
+                row[f"FEATURE_{j}"] = int(val)
+
+            rows.append(row)
+
+
+    df = pd.DataFrame(rows)
+
+    # feature_cols = [f"FEATURE_{j}" for j in range(7)]
+    feature_cols = sorted(
+        [col for col in df.columns if col.startswith("FEATURE_")],
+        key=lambda x: int(x.split("_")[1])
+    )
+
+    df = df[["ID", "TIME", *feature_cols, "ACTION", "RISK"]]
+
+    return df
+
+
+
 """
 Decode simulator state index into MRL classifier features.
 idx_type="obs":
