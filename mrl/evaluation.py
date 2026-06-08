@@ -9,6 +9,59 @@ from sepsisSimDiabetes.DataGenerator import DataGenerator
 
 
 """
+    Tabular Fitted-Q Iteration
+"""
+def run_tabular_FQI(df_data, gamma, n_epochs, use_tqdm=False):
+    S, A, R, S_next = df_data['State'].values, df_data['Action'].values, df_data['Reward'].values, df_data['NextState'].values
+    N = len(S)
+    
+    Qs = []
+    Q = np.zeros((nS, nA))
+
+    # unobserved states lead to minimum reward
+    observed_s = set(S) | set(S_next) - {-1}
+    unobserved_s = sorted(set(range(nS)) - observed_s)
+    Q[unobserved_s, :] = G_min
+
+    # unobserved action in observed states lead to minimum reward
+    terminal_action = (A == -1)
+    terminal_states = S[terminal_action]
+    observed_sa = set(zip(S, A))
+    unobserved_sa = np.array(sorted(
+        set(itertools.product(observed_s, range(nA))) 
+        - observed_sa - set(itertools.product(terminal_states, range(nA)))
+    ))
+    Q[unobserved_sa[:, 0], unobserved_sa[:, 1]] = G_min
+
+    # reset absorbing states
+    terminal_states = df_data.loc[
+            df_data["Action"] == -1,
+            "State"
+        ].astype(int).unique()
+
+    Q[terminal_states, :] = 0
+
+    Qs.append(copy.deepcopy(Q))
+    for k in tqdm(range(n_epochs), disable=not(use_tqdm)):
+        y = R + gamma * Q[S_next, :].max(axis=1)
+        
+        # Update value as the sample average
+        sa_list, value_list = npi.group_by(np.array([S, A]).T).mean(y)
+        Q[sa_list[:, 0], sa_list[:, 1]] = value_list
+
+        # Handle terminal states with action -1, applies to all actions
+        terminal_action = (sa_list[:, 1] == -1)
+        terminal_states = sa_list[terminal_action, :][:, 0]
+        Q[terminal_states, :] = value_list[terminal_action][:,np.newaxis]
+
+        # Save
+        Qs.append(copy.deepcopy(Q))
+
+    return Qs
+
+
+
+"""
 Convert DataGenerator outputs into long-format DataFrame.
 Output columns:
         ID, TIME, FEATURE_0..., ACTION, RISK
@@ -23,7 +76,7 @@ idx_type:
         "obs"  -> FEATURE_0...FEATURE_6
         "full" -> FEATURE_0...FEATURE_7, while FEATURE_0=diabetic_idx
 """
-def dg_to_long_df_feature(
+def dg_to_df_mrl(
     iter_states,
     iter_actions,
     iter_lengths,
