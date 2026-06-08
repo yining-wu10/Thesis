@@ -72,9 +72,63 @@ def run_tabular_FQI(
     return Qs
 
 
+"""
+FQI model compatible: Convert DataGenerator outputs into transitions DataFrame.
+"""
+def dg_to_df_fqi(
+    iter_states,
+    iter_actions,
+    iter_lengths,
+    iter_rewards,
+):
+    rows = []
+
+    N = iter_states.shape[0]
+
+    for i in range(N):
+        T_i = int(iter_lengths[i, 0])
+
+        # ==================================================
+        # Normal transitions
+        # ==================================================
+        for t in range(T_i):
+            s = int(iter_states[i, t, 0])
+            a = int(iter_actions[i, t, 0])
+            s_next = int(iter_states[i, t + 1, 0])
+            r = float(iter_rewards[i, t + 1, 0])
+
+            rows.append({
+                "ID": i,
+                "State": s,
+                "Action": a,
+                "Reward": r,
+                "NextState": s_next,
+            })
+
+        # ==================================================
+        # Add terminal transition (terminal_state, -1, 0, terminal_state)
+        # only if trajectory truly terminated
+        # ==================================================
+        terminal_reward = float(iter_rewards[i, T_i, 0])
+
+        if terminal_reward != 0:
+            terminal_state = int(iter_states[i, T_i, 0])
+
+            rows.append({
+                "ID": i,
+                "State": terminal_state,
+                "Action": -1,
+                "Reward": 0.0,
+                "NextState": terminal_state,
+            })
+
+    return pd.DataFrame(rows)
+
+
+
 
 """
-Convert DataGenerator outputs into long-format DataFrame.
+MRL model compatible: Convert DataGenerator outputs into long-format DataFrame.
 Output columns:
         ID, TIME, FEATURE_0..., ACTION, RISK
 Rules:
