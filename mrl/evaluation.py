@@ -11,7 +11,15 @@ from sepsisSimDiabetes.DataGenerator import DataGenerator
 """
     Tabular Fitted-Q Iteration
 """
-def run_tabular_FQI(df_data, gamma, n_epochs, use_tqdm=False):
+def run_tabular_FQI(
+    df_data,
+    gamma,
+    n_epochs,
+    nS,
+    nA,
+    G_min,
+    use_tqdm=False
+):
     S, A, R, S_next = df_data['State'].values, df_data['Action'].values, df_data['Reward'].values, df_data['NextState'].values
     N = len(S)
     
