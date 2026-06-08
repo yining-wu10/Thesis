@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import itertools
 import copy
+from tqdm import tqdm
+import numpy_indexed as npi
 from sepsisSimDiabetes.State import State
 from sepsisSimDiabetes.Action import Action
 from sepsisSimDiabetes.DataGenerator import DataGenerator
