@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import itertools
 from sepsisSimDiabetes.State import State
 from sepsisSimDiabetes.Action import Action
 from sepsisSimDiabetes.DataGenerator import DataGenerator
