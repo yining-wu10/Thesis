@@ -183,11 +183,17 @@ def findContradictionStochastic(df, th, p_feats):
         y_regr_raw = df["NEXT_CLUSTER"]
         encoder = LabelEncoder()
         y_regr = encoder.fit_transform(y_regr_raw)
-        mlp = MLPClassifier((10,), "relu", alpha=0.05, learning_rate_init=0.2, tol=1e-3)
-        mlp.fit(X_regr, y_regr)
+        # mlp = MLPClassifier((10,), "relu", alpha=0.05, learning_rate_init=0.2, tol=1e-3)
+        # mlp.fit(X_regr, y_regr)
 
+        lr = LogisticRegression(max_iter=1000, solver='lbfgs')
+        lr.fit(X_regr, y_regr)
+        
         # Step 2. The variances in the predicted probabilities is used to measure how much variation the cluster has
-        y_preds = mlp.predict_proba(X_regr)
+        # y_preds = mlp.predict_proba(X_regr)
+        # return sum(np.std(y_preds, axis=0) * np.sum(y_regr, axis=0))
+
+        y_preds = lr.predict_proba(X_regr)
         return sum(np.std(y_preds, axis=0) * np.sum(y_regr, axis=0))
 
     # Step 3. Find the cluster-action pair with highest variance. Early stop if variance less than threshold.
