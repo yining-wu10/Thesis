@@ -168,7 +168,7 @@ def initializeClusters(
 
 # Function for the Iterations
 
-
+'''
 def findContradictionStochastic(df, th, p_feats):
     """Similar to below. Stochastic version. p_feats is number of features"""
     # filter out relevant entries in datasets
@@ -223,6 +223,103 @@ def findContradictionStochastic(df, th, p_feats):
     if stds.max() < th:
         return (-1, -1)
     return stds.idxmax()
+'''
+
+# Runtime DEBUG 
+
+def findContradictionStochastic(df, th, p_feats):
+    t0_total = time.perf_counter()
+
+    X = df[df.NEXT_CLUSTER != "None"]
+
+    print("\n[findContradictionStochastic]")
+    print("rows:", len(X))
+    print("clusters:", X["CLUSTER"].nunique())
+    print("actions:", X["ACTION"].nunique())
+    print("groups:", X.groupby(["CLUSTER", "ACTION"]).ngroups)
+
+    timing = {
+        "slice": 0.0,
+        "encode": 0.0,
+        "fit": 0.0,
+        "predict": 0.0,
+        "score": 0.0,
+        "groups": 0,
+        "single_class_groups": 0,
+    }
+
+    def next_cluster_std_weighted(g):
+        timing["groups"] += 1
+
+        t0 = time.perf_counter()
+        X_regr = g.iloc[:, 2 : p_feats + 2]
+        y_regr_raw = g["NEXT_CLUSTER"]
+        timing["slice"] += time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        encoder = LabelEncoder()
+        y_regr = encoder.fit_transform(y_regr_raw)
+        timing["encode"] += time.perf_counter() - t0
+
+        if len(np.unique(y_regr)) < 2:
+            timing["single_class_groups"] += 1
+            return 0.0
+
+        t0 = time.perf_counter()
+        dt = DecisionTreeClassifier(
+            max_depth=None,
+            min_samples_leaf=1,
+            random_state=0,
+        )
+        dt.fit(X_regr, y_regr)
+        timing["fit"] += time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        y_preds = dt.predict_proba(X_regr)
+        timing["predict"] += time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        score = sum(
+            np.std(y_preds, axis=0)
+            *
+            np.bincount(y_regr, minlength=y_preds.shape[1])
+        )
+        timing["score"] += time.perf_counter() - t0
+
+        return score
+
+    t0 = time.perf_counter()
+    stds = X.groupby(["CLUSTER", "ACTION"]).apply(next_cluster_std_weighted)
+    groupby_time = time.perf_counter() - t0
+
+    max_std = stds.max()
+
+    total_time = time.perf_counter() - t0_total
+
+    print("max std:", max_std)
+    print("threshold:", th)
+    print("will stop:", max_std < th)
+    print("chosen:", (-1, -1) if max_std < th else stds.idxmax())
+
+    print("\n[timing seconds]")
+    print("groupby_apply_total:", round(groupby_time, 4))
+    print("slice:", round(timing["slice"], 4))
+    print("encode:", round(timing["encode"], 4))
+    print("fit:", round(timing["fit"], 4))
+    print("predict:", round(timing["predict"], 4))
+    print("score:", round(timing["score"], 4))
+    print("total:", round(total_time, 4))
+
+    print("\n[group info]")
+    print("groups:", timing["groups"])
+    print("single_class_groups:", timing["single_class_groups"])
+    print("multi_class_groups:", timing["groups"] - timing["single_class_groups"])
+
+    if max_std < th:
+        return (-1, -1)
+
+    return stds.idxmax()
+
 
 
 def findContradiction(df, th, verbose=False):
