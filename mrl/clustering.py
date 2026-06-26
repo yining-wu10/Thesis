@@ -168,7 +168,6 @@ def initializeClusters(
 
 # Function for the Iterations
 
-'''
 def findContradictionStochastic(df, th, p_feats):
     """Similar to below. Stochastic version. p_feats is number of features"""
     # filter out relevant entries in datasets
@@ -228,10 +227,10 @@ def findContradictionStochastic(df, th, p_feats):
     if stds.max() < th:
         return (-1, -1)
     return stds.idxmax()
-'''
+
 
 # Runtime DEBUG 
-
+'''
 def findContradictionStochastic(df, th, p_feats):
     t0_total = time.perf_counter()
 
@@ -324,7 +323,7 @@ def findContradictionStochastic(df, th, p_feats):
         return (-1, -1)
 
     return stds.idxmax()
-
+'''
 
 
 def findContradiction(df, th, verbose=False):
@@ -647,7 +646,7 @@ def cluster_update(df, ids, k):
     ] = k
     return df
 
-
+'''
 def splitter(
     df: pd.DataFrame,
     pfeatures: int,
@@ -1015,7 +1014,406 @@ def splitter(
         split_scores,
         training_error,
     )
+'''
 
+# Runtime DEBUG
+
+def splitter(
+    df: pd.DataFrame,
+    pfeatures: int,
+    th: int,
+    eta: int = 25,
+    precision_thresh: float = 1e-14,
+    df_test: pd.DataFrame = None,
+    testing: bool = False,
+    max_k: int = 6,
+    classification: str = None,
+    split_classifier_params: Dict = None,
+    h: int = 5,
+    gamma: int = 1,
+    verbose: bool = False,
+    n: int = -1,
+    plot: bool = False,
+    save_epoch: bool = False,
+    save_path: str = None,
+    save_every: int = 1,
+    eval_samples: int = None,
+    stochastic: bool = False,
+) -> Tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    Union[None, pd.DataFrame],
+    pd.DataFrame,
+    int,
+    List[float],
+    Union[None, List[float]],
+]:
+    """
+    Performs the splitting algorithm to resolve contradictions in the dataset.
+
+    Args:
+        df (pd.DataFrame): The input dataframe.
+        pfeatures (int): Number of features.
+        th (int): Threshold for minimum split.
+        eta (int, optional): Incoherence threshold for splits. Defaults to 25.
+        precision_thresh (float, optional): Precision threshold for new minimum value error. Defaults to 1e-14.
+        df_test (pd.DataFrame, optional): Test dataframe for cross-validation. Defaults to None.
+        testing (bool, optional): Flag to indicate cross-validation. Defaults to False.
+        max_k (int, optional): Maximum number of clusters. Defaults to 6.
+        classification (str, optional): Classification algorithm. Defaults to None.
+        split_classifier_params (Dict, optional): Classification parameters. Defaults to None.
+        h (int, optional): Hyperparameter for training value error calculation. Defaults to 5.
+        gamma (int, optional): Hyperparameter for training value error calculation. Defaults to 1.
+        verbose (bool, optional): Verbosity flag. Defaults to False.
+        n (int, optional): Number of clusters for vertical line in plot. Defaults to -1.
+        plot (bool, optional): Flag to plot the results. Defaults to False.
+        save_epoch (bool, optional): Flag to save dataframe at each epoch. Defaults to False.
+        save_path (str, optional): Path to save the dataframe. Defaults to None.
+        save_every (int, optional): Interval for saving epochs. Defaults to 1.
+        eval_samples (int, optional): Number of evaluation samples. Defaults to None.
+        stochastic (bool, optional): Flag for stochastic processing. Defaults to False.
+
+    Returns:
+        Tuple containing:
+        - The final resulting dataframe.
+        - DataFrame of incoherences.
+        - DataFrame of training errors.
+        - DataFrame of testing errors or None.
+        - DataFrame with the optimal split.
+        - Optimal number of clusters.
+        - List of split scores.
+        - List of training errors or None.
+    """
+    # initializing lists for error & accuracy data
+    testing_R2 = []
+    training_acc = []
+    testing_acc = []
+    testing_error = []
+    training_error = []
+
+    incoherences = []
+    split_scores = []
+    thresholds = []
+
+    # determine if the problem has OG cluster
+    if "OG_CLUSTER" in df.columns:
+        grid = True
+    else:
+        grid = False
+
+    k = df["CLUSTER"].nunique()  # initial number of clusters
+    nc = k  # number of clusters
+
+    df_new = deepcopy(df)
+
+    # storing optimal df
+    best_df = None
+    opt_k = None
+    min_error = float("inf")
+
+    # backup values in case threshold fails
+    backup_min_error = float("inf")
+    backup_df = None
+    backup_opt_k = None
+
+    # Setting progress bar--------------
+    split_bar = tqdm(range(max_k - k))
+    split_bar.set_description("Splitting...")
+
+    # Setting progress bar--------------
+    for i in split_bar:
+        split_bar.set_description("Splitting... |#Clusters:%s" % (nc))
+        cont = False
+        if verbose:
+            print("Finding contradiction...")
+
+        iter_t0 = time.perf_counter()
+        t0 = time.perf_counter()
+        if not stochastic:
+            c, a = findContradiction(df_new, th)
+        else:
+            c, a = findContradictionStochastic(df_new, th, pfeatures)
+        t_find = time.perf_counter() - t0
+        print(f"\n[ITER {i}]")
+        print(f"[time] find contradiction: {t_find:.4f}s")
+        print(f"[chosen] c={c}, a={a}")
+        print(f"[clusters before] actual={df_new['CLUSTER'].nunique()}, nc={nc}")
+        
+        if verbose:
+            print(f"Found contradiction in {time.time()-st}!")
+
+        gc.collect()
+        if (
+            c != -1
+        ):  # this means that the number of contradictions/variance is over the threshold, so no early stopping
+
+            # print("Splitting...")
+            st = time.time()
+
+            if not stochastic:
+                # finding contradictions and splitting
+                a, b = contradiction(df_new, c, a)
+                if verbose:
+                    print(
+                        "Cluster splitted",
+                        c,
+                        "| Action causing contradiction:",
+                        a,
+                        "| Cluster most elements went to:",
+                        b,
+                    )
+                df_new, score = split(
+                    df_new,
+                    c,
+                    a,
+                    b,
+                    pfeatures,
+                    nc,
+                    classification,
+                    split_classifier_params,
+                )
+                split_scores.append(score)
+
+            else:
+                if verbose:
+                    print("Cluster splitted", c, "| Action causing contradiction:", a)
+                t0 = time.perf_counter()
+                before_nclus = df_new["CLUSTER"].nunique()
+                before_rows = df_new["CLUSTER"].value_counts()
+                
+                df_new = splitStochastic(
+                    df_new,
+                    c,
+                    a,
+                    pfeatures,
+                    nc,
+                    2,
+                    classification,
+                    split_classifier_params,
+                )
+                t_split = time.perf_counter() - t0
+                after_nclus = df_new["CLUSTER"].nunique()
+                after_rows = df_new["CLUSTER"].value_counts()
+
+                print(f"[time] splitStochastic: {t_split:.4f}s")
+                print(f"[clusters after] actual={after_nclus}, nc={nc}")
+                print(f"[split success] {after_nclus > before_nclus}")
+                print(f"[old cluster {c}] before={before_rows.get(c, 0)}, after={after_rows.get(c, 0)}")
+                print(f"[new cluster {nc}] size={after_rows.get(nc, 0)}")
+            
+            if verbose:
+                print(f"Split clusters in {time.time() - st}!")
+            
+            if save_epoch and (
+                i % save_every == 0
+            ):  # don't want to keep saving huge disk usage
+                if verbose:
+                    print("Saving checkpoint")
+                df_new.to_csv(save_path / f"df_epoch_{i}.csv")
+
+            if verbose:
+                print("Calculating Incoherences...")
+            # calculate incoherences
+
+            st = time.time()
+    
+            if not stochastic:
+                next_clus = next_clusters(df_new)
+                next_clus["incoherence"] = (1 - next_clus["purity"]) * next_clus[
+                    "count"
+                ]
+                next_clus.reset_index(inplace=True)
+                next_clus = next_clus.groupby("CLUSTER").sum()
+                max_inc = next_clus["incoherence"].max()
+                incoherences.append(max_inc)
+                if verbose:
+                    print(f"Calculated Incoherences in {time.time()-st}")
+
+            # error and accuracy calculations
+            st = time.time()
+            if verbose:
+                print("Calculating Evaluation Metrics...")
+
+            if verbose:
+                print("Calculating R2 metric...")
+                print("Calculating training error...")
+
+            t0 = time.perf_counter()
+            train_error = training_value_error(
+                df_new,
+                gamma,
+                relative=False,
+                h=h,
+                eval_samples=eval_samples,
+                stochastic=stochastic,
+            )
+            training_error.append(train_error)
+
+            t_train_error = time.perf_counter() - t0
+            print(f"[time] training_value_error: {t_train_error:.4f}s")
+            print(f"[train error] {train_error}")
+            
+            if verbose:
+                print("Training Error", train_error)
+                print("Calculating training accuracy (grid only) ...")
+            
+            if grid and not stochastic:
+                train_acc = training_accuracy(df_new)[0]
+                training_acc.append(train_acc)
+            
+            if verbose:
+                print("Testing...")
+            
+            if testing and not stochastic:
+                model = predict_cluster(df_new, pfeatures)
+                R2_test = R2_value_testing(df_test, df_new, model, pfeatures)
+                testing_R2.append(R2_test)
+                test_error = testing_value_error(
+                    df_test, df_new, model, pfeatures, gamma, relative=False, h=h
+                )
+                testing_error.append(test_error)
+
+                if grid:
+                    test_acc = testing_accuracy(df_test, df_new, model, pfeatures)[0]
+                    testing_acc.append(test_acc)
+            gc.collect()
+            
+            # printing error and accuracy values
+            if verbose:
+                # print('training value R2:', R2_train)
+                print("training value error:", train_error)
+                if grid and not stochastic:
+                    print("training accuracy:", train_acc)
+                if testing and not stochastic:
+                    print("testing value R2:", R2_test)
+                    print("testing value error:", test_error)
+                    if grid:
+                        print("testing accuracy:", test_acc)
+
+            if not stochastic:
+                if verbose:
+                    print("Calculating Threshold...")
+                # update optimal dataframe if inc threshold and min error met
+                # threshold calculated using eta * sqrt(number of datapoints) /
+                # number of clusters
+                threshold = eta * df_new.shape[0] ** 0.5 / (nc + 1)
+                thresholds.append(threshold)
+                if verbose:
+                    print("threshold:", threshold, "max_incoherence:", max_inc)
+
+                # print(f"Evaluation complete in {time.time()-st}")
+
+            if verbose:
+                print("Saving best model...")
+            st = time.time()
+            # only update the best dataframe if training error is smaller
+            # than previous training error by at least precision_thresh,
+            # and also if maximum incoherence is lower than calculated threshold
+            if verbose:
+                print("train error: ", train_error)
+            if train_error < (min_error - precision_thresh):
+                # if max_inc < threshold:
+                min_error = train_error
+                best_df = df_new.copy()
+                opt_k = nc + 1
+                if verbose:
+                    print("new opt_k", opt_k)
+
+            # code for storing optimal clustering even if incorrect incoherence
+            # threshold is chosen and nothing passes threshold; to prevent
+            # training interruption
+            elif opt_k == None and train_error < (backup_min_error - precision_thresh):
+                backup_min_error = train_error
+                backup_df = df_new.copy()
+                backup_opt_k = nc + 1
+
+            cont = True
+            nc += 1
+            if verbose:
+                print(f"Model saved in {time.time()-st}")
+            iter_total = time.perf_counter() - iter_t0
+            other_time = iter_total - t_find - t_split - t_train_error
+            print(f"[time] iteration total: {iter_total:.4f}s")
+            print(f"[time] unaccounted other: {other_time:.4f}s")
+            print("-" * 60)
+        if not cont:
+            break
+        if nc >= max_k:
+            if verbose:
+                print("Optimal # of clusters reached")
+            break
+
+    # in the case that threshold prevents any values from passing, use backup
+    if opt_k == None:
+        opt_k = backup_opt_k
+        best_df = backup_df
+        min_error = backup_min_error
+
+    # plotting functions
+    # Plotting accuracy and value R2
+    its = np.arange(k + 1, nc + 1)
+    if plot:
+        if grid and not stochastic:
+            fig1, ax1 = plt.subplots()
+            ax1.plot(its, training_acc, label="Training Accuracy")
+            if testing:
+                ax1.plot(its, testing_acc, label="Testing Accuracy")
+            if n > 0:
+                ax1.axvline(
+                    x=n, linestyle="--", color="r"
+                )  # Plotting vertical line at #cluster =n
+            ax1.set_ylim(0, 1)
+            ax1.set_xlabel("# of Clusters")
+            ax1.set_ylabel("R2 or Accuracy %")
+            ax1.set_title("R2 and Accuracy During Splitting")
+            ax1.legend()
+        ## Plotting value error E((v_est - v_true)^2)
+        fig2, ax2 = plt.subplots()
+        ax2.plot(its, training_error, label="Training Error")
+        if testing and not stochastic:
+            ax2.plot(its, testing_error, label="Testing Error")
+        if n > 0:
+            ax2.axvline(
+                x=n, linestyle="--", color="r"
+            )  # Plotting vertical line at #cluster =n
+        ax2.set_ylim(0)
+        ax2.set_xlabel("# of Clusters")
+        ax2.set_ylabel("Value error")
+        ax2.set_title("Value error by number of clusters")
+        ax2.legend()
+        plt.show()
+
+    df_train_error = pd.DataFrame(
+        list(zip(its, training_error)), columns=["Clusters", "Error"]
+    )
+    df_incoherences = pd.DataFrame(
+        list(zip(its, incoherences)), columns=["Clusters", "Incoherences"]
+    )
+    if testing and not stochastic:
+        df_test_error = pd.DataFrame(
+            list(zip(its, testing_error)), columns=["Clusters", "Error"]
+        )
+        return (
+            df_new,
+            df_incoherences,
+            df_train_error,
+            df_test_error,
+            best_df,
+            opt_k,
+            split_scores,
+            None,
+        )
+    return (
+        df_new,
+        df_incoherences,
+        df_train_error,
+        testing_error,
+        best_df,
+        opt_k,
+        split_scores,
+        training_error,
+    )
 
 # Splitter algorithm with Group K-fold cross-validation (number of folds from param cv)
 # Returns dataframes of incoherences, errors, and splitter split-scores; these
