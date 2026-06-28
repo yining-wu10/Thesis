@@ -282,8 +282,10 @@ def training_value_error(
 
     if stochastic:
         P_df, R_df = get_MDP_stochastic(df_new)
+        P_lookup = build_transition_lookup(P_df)
     else:
         P_df, R_df = get_MDP(df_new)
+        P_lookup = None
 
     # --------------------------------------------------
     # Convert dataframe columns to numpy arrays
@@ -340,24 +342,7 @@ def training_value_error(
     # --------------------------------------------------
     # Convert R_df lookup to faster mapping
     # --------------------------------------------------
-    R_series = R_df.squeeze()
-    R_lookup = R_series.to_dict()
-
-    # Optional cache for deterministic transitions
-    P_cache = {}
-
-    def get_next_cluster_deterministic(s, a):
-        key = (s, a)
-        if key in P_cache:
-            return P_cache[key]
-
-        val = P_df.loc[s, a]
-
-        if hasattr(val, "values"):
-            val = val.values[0]
-
-        P_cache[key] = val
-        return val
+    R_lookup = R_df.squeeze().to_dict()
 
     # --------------------------------------------------
     # Main evaluation loop
@@ -392,7 +377,8 @@ def training_value_error(
             s = cluster_arr[pos]
 
             while True:
-                v_estim = gamma * v_estim + R_lookup.get(s, 0.0)
+                v_estim = gamma * v_estim + R_lookup[s]
+                #v_estim = gamma * v_estim + R_lookup.get(s, 0.0)
 
                 if pos >= end_pos:
                     break
@@ -401,9 +387,9 @@ def training_value_error(
 
                 try:
                     if not stochastic:
-                        s = get_next_cluster_deterministic(s, a)
+                        s = P_df.loc[s, a].values[0]
                     else:
-                        s = sim_next_cluster(P_df, s, a)
+                        s = sim_next_cluster_fast(P_lookup, s, a)
                 except Exception:
                     # Same behavior as original code: if transition is unseen, keep current s
                     pass
@@ -542,6 +528,46 @@ def training_value_error(
     E_v = E_v / (len(eval_ids) * num_sims)
     return np.sqrt(E_v)
 '''
+
+def build_transition_lookup(P_df):
+    """
+    Convert stochastic transition dataframe into fast lookup dict:
+    (cluster, action) -> (next_clusters, probabilities)
+    """
+    P_lookup = {}
+
+    for (s, a), g in P_df.groupby(["CLUSTER", "ACTION"]):
+        next_clusters = g["NEXT_CLUSTER"].to_numpy()
+        probs = g["PROBABILITY"].to_numpy(dtype=float)
+
+        probs = probs / probs.sum()
+
+        P_lookup[(s, a)] = (next_clusters, probs)
+
+    return P_lookup
+
+
+def sim_next_cluster_fast(P_lookup, s, a):
+    """
+    Fast stochastic next-cluster sampling.
+    """
+    key = (s, a)
+
+    if key not in P_lookup:
+        raise ValueError("Transition Action not observed")
+
+    next_clusters, probs = P_lookup[key]
+
+    rand = np.random.random()
+    agg = 0.0
+
+    for nc, p in zip(next_clusters, probs):
+        agg += p
+        if agg > rand:
+            return nc
+
+    return next_clusters[-1]
+
 
 def sim_next_cluster(P_df, s, a):
     """Get the next cluster from cluster/action pair, stochastic case"""
