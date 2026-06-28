@@ -280,9 +280,12 @@ def training_value_error(
     stochastic=False,
 ):  # Length of forecast. The error is computed on v_h = \sum_{t=h}^H v_t
     # if h = -1, we forecast the whole path
+    
     E_v = 0
+    
     if stochastic: P_df, R_df = get_MDP_stochastic(df_new)
     else: P_df, R_df = get_MDP(df_new)
+    
     df2 = df_new.reset_index()
     df2 = df2.groupby(["ID"]).first()
     N_train = df2.shape[0]
@@ -293,13 +296,16 @@ def training_value_error(
         eval_ids = np.random.default_rng().choice(
             N_train, size=eval_samples, replace=False
         )
+    # only need 1 sim if we are not using stochastic    
+    num_sims = num_sims if stochastic else 1
 
+    
     for i in eval_ids:
         index = df2["index"].iloc[i]
+        
         # initializing first state for each ID
-
         if h == -1:
-            t = 0
+            t_start = 0
 
         else:
             H = -1
@@ -313,23 +319,19 @@ def training_value_error(
                     break
                 if df_new["ID"].loc[index + H] != df_new["ID"].loc[index + H + 1]:
                     break
-            t = H - h
+            t_start = max(0, H - h)
 
         v_true = 0
         v_estims = []
-        s = df_new["CLUSTER"].loc[index + t]
-        a = df_new["ACTION"].loc[index + t]
-
-        # only need 1 sim if we are not using stochastic
-        if not stochastic:
-            num_sims = 1
 
         # average error of num_sims
         for i in range(num_sims):
 
             v_estim = 0
-            #t = 0
+            t = t_start
 
+            s = df_new["CLUSTER"].loc[index + t]
+            a = df_new["ACTION"].loc[index + t]
             # predicting path of each ID
             while True:
 
@@ -370,7 +372,7 @@ def training_value_error(
 
         v_estim = sum(v_estims) / len(v_estims)
 
-    E_v = E_v / len(eval_ids)
+    E_v = E_v / (len(eval_ids) * num_sims)
     return np.sqrt(E_v)
 
 
