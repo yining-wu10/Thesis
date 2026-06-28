@@ -328,7 +328,7 @@ def training_value_error(
         for i in range(num_sims):
 
             v_estim = 0
-            t = 0
+            #t = 0
 
             # predicting path of each ID
             while True:
@@ -370,7 +370,7 @@ def training_value_error(
 
         v_estim = sum(v_estims) / len(v_estims)
 
-    E_v = E_v / N_train
+    E_v = E_v / len(eval_ids)
     return np.sqrt(E_v)
 
 
