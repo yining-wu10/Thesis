@@ -292,10 +292,22 @@ def training_value_error(
 
     # default evals are the N_train paths, but can specify sampling a certain number of paths
     eval_ids = list(range(N_train))
-    if eval_samples:
+    if eval_samples is None:
+        pass
+    elif isinstance(eval_samples, float):
+        n_eval = max(1, int(N_train * eval_samples))
         eval_ids = np.random.default_rng().choice(
-            N_train, size=eval_samples, replace=False
+            N_train,
+            size=n_eval,
+            replace=False,
         )
+    else:
+        eval_ids = np.random.default_rng().choice(
+            N_train,
+            size=eval_samples,
+            replace=False,
+        )
+   
     # only need 1 sim if we are not using stochastic    
     num_sims = num_sims if stochastic else 1
 
