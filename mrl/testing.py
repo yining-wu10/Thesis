@@ -268,7 +268,162 @@ def add_sink(P_df_noend, cs, R_df):
 # E((\hat{v}-v)^2) expected error in estimating values (risk) given actions
 # Returns a float of sqrt average value error per ID
 
+# Numpy version
+def training_value_error(
+    df_new,
+    gamma=1,
+    relative=False,
+    h=5,
+    eval_samples=None,
+    num_sims=20,
+    stochastic=False,
+):
+    E_v = 0.0
 
+    if stochastic:
+        P_df, R_df = get_MDP_stochastic(df_new)
+    else:
+        P_df, R_df = get_MDP(df_new)
+
+    # --------------------------------------------------
+    # Convert dataframe columns to numpy arrays
+    # --------------------------------------------------
+    df_eval = df_new.reset_index(drop=True)
+
+    ids_arr = df_eval["ID"].to_numpy()
+    cluster_arr = df_eval["CLUSTER"].to_numpy()
+    action_arr = df_eval["ACTION"].to_numpy()
+    risk_arr = df_eval["RISK"].to_numpy(dtype=float)
+
+    # --------------------------------------------------
+    # Precompute start and end row positions of each trajectory
+    # Assumption: rows of the same ID are contiguous and sorted by time
+    # --------------------------------------------------
+    first_rows = df_eval.groupby("ID", sort=False).head(1).index.to_numpy()
+    last_rows = df_eval.groupby("ID", sort=False).tail(1).index.to_numpy()
+
+    N_train = len(first_rows)
+
+    # --------------------------------------------------
+    # Choose evaluation trajectories
+    # float: proportion, int: count
+    # --------------------------------------------------
+    eval_ids = np.arange(N_train)
+
+    if eval_samples is None:
+        pass
+
+    elif isinstance(eval_samples, float):
+        if not (0 < eval_samples <= 1):
+            raise ValueError(
+                "If eval_samples is a float, it must be in (0, 1]."
+            )
+        n_eval = max(1, int(N_train * eval_samples))
+        eval_ids = np.random.default_rng().choice(
+            N_train,
+            size=n_eval,
+            replace=False,
+        )
+
+    else:
+        eval_ids = np.random.default_rng().choice(
+            N_train,
+            size=eval_samples,
+            replace=False,
+        )
+
+    # --------------------------------------------------
+    # Deterministic only needs one simulation
+    # --------------------------------------------------
+    n_sims = num_sims if stochastic else 1
+
+    # --------------------------------------------------
+    # Convert R_df lookup to faster mapping
+    # --------------------------------------------------
+    R_series = R_df.squeeze()
+    R_lookup = R_series.to_dict()
+
+    # Optional cache for deterministic transitions
+    P_cache = {}
+
+    def get_next_cluster_deterministic(s, a):
+        key = (s, a)
+        if key in P_cache:
+            return P_cache[key]
+
+        val = P_df.loc[s, a]
+
+        if hasattr(val, "values"):
+            val = val.values[0]
+
+        P_cache[key] = val
+        return val
+
+    # --------------------------------------------------
+    # Main evaluation loop
+    # --------------------------------------------------
+    for eval_i in eval_ids:
+        start_pos = first_rows[eval_i]
+        end_pos = last_rows[eval_i]
+
+        if h == -1:
+            t_start_pos = start_pos
+        else:
+            # h means last h steps in your implementation
+            t_start_pos = max(start_pos, end_pos - h)
+
+        # Compute true value once, because it does not depend on stochastic simulation
+        v_true = 0.0
+        pos = t_start_pos
+
+        while True:
+            v_true = gamma * v_true + risk_arr[pos]
+
+            if pos >= end_pos:
+                break
+
+            pos += 1
+
+        # Simulate estimated values
+        for sim_i in range(n_sims):
+            v_estim = 0.0
+            pos = t_start_pos
+
+            s = cluster_arr[pos]
+
+            while True:
+                v_estim = gamma * v_estim + R_lookup.get(s, 0.0)
+
+                if pos >= end_pos:
+                    break
+
+                a = action_arr[pos]
+
+                try:
+                    if not stochastic:
+                        s = get_next_cluster_deterministic(s, a)
+                    else:
+                        s = sim_next_cluster(P_df, s, a)
+                except Exception:
+                    # Same behavior as original code: if transition is unseen, keep current s
+                    pass
+
+                pos += 1
+
+            if relative:
+                if v_true == 0:
+                    continue
+                E_v += ((v_true - v_estim) / v_true) ** 2
+            else:
+                E_v += (v_true - v_estim) ** 2
+
+    E_v = E_v / (len(eval_ids) * n_sims)
+
+    return np.sqrt(E_v)
+
+
+# Original version
+'''
 def training_value_error(
     df_new,  # Outpul of algorithm
     gamma=1,  # discount factor
@@ -386,7 +541,7 @@ def training_value_error(
 
     E_v = E_v / (len(eval_ids) * num_sims)
     return np.sqrt(E_v)
-
+'''
 
 def sim_next_cluster(P_df, s, a):
     """Get the next cluster from cluster/action pair, stochastic case"""
