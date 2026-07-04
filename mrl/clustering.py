@@ -167,7 +167,7 @@ def initializeClusters(
 
 
 # Function for the Iterations
-
+'''
 def findContradictionStochastic(df, th, p_feats):
     """Similar to below. Stochastic version. p_feats is number of features"""
     # filter out relevant entries in datasets
@@ -227,10 +227,9 @@ def findContradictionStochastic(df, th, p_feats):
     if stds.max() < th:
         return (-1, -1)
     return stds.idxmax()
-
+'''
 
 # Runtime DEBUG 
-'''
 def findContradictionStochastic(df, th, p_feats):
     t0_total = time.perf_counter()
 
@@ -323,7 +322,7 @@ def findContradictionStochastic(df, th, p_feats):
         return (-1, -1)
 
     return stds.idxmax()
-'''
+
 
 
 def findContradiction(df, th, verbose=False):
