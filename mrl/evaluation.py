@@ -415,7 +415,14 @@ def value_diff(
     max_num_steps,
     idx_type="obs",
     diabetic_idx=0,
-    gamma=1.0,
+    alpha=0.2,  
+    beta=0.8,  
+    min_action_obs=-1, 
+    min_action_purity=0.7,  
+    prob="max",  
+    gamma=1.0,  
+    epsilon=10 ** (-8),
+    p=False,
     p_diabetes=0.2,
     use_median=False,
     use_tqdm=False,
@@ -450,7 +457,16 @@ def value_diff(
     for i, model in enumerate(models):
 
         if model.pi is None:
-            model.solve_MDP(gamma=gamma, epsilon=1e-4)
+            model.solve_MDP(
+                alpha=alpha,
+                beta=beta,
+                min_action_obs=min_action_obs,
+                min_action_purity=min_action_purity,
+                prob=prob,
+                gamma=gamma,
+                epsilon=epsilon,
+                p=p,
+                )
 
         mrl_policy_array = mrl_model_to_prob_array(
             model=model,
