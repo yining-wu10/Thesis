@@ -1270,14 +1270,26 @@ def splitter(
     # Cooldown blacklist ==============
     cooldown = {}
     cooldown_rounds = 3
+    cooldown_added = 0
+    cooldown_recovered = 0
+    cooldown_expired = 0
+
+    # 记录哪些pair曾进入cooldown
+    cooldown_history = set()
 
     def update_cooldown(cooldown_dict):
+        nonlocal cooldown_expired
+
         expired = []
-        for pair in cooldown_dict:
+
+        for pair in list(cooldown_dict.keys()):
             cooldown_dict[pair] -= 1
+
             if cooldown_dict[pair] <= 0:
                 expired.append(pair)
+
         for pair in expired:
+            cooldown_expired += 1
             del cooldown_dict[pair]
             
     # Setting progress bar--------------
@@ -1391,6 +1403,8 @@ def splitter(
 
                     # Failed pair enters cooldown ==============
                     cooldown[(int(c), int(a))] = cooldown_rounds
+                    cooldown_added += 1
+                    cooldown_history.add((int(c), int(a)))
                     update_cooldown(cooldown)
                     print(
                     f"[skip] split failed; pair {(int(c), int(a))} "
@@ -1398,7 +1412,10 @@ def splitter(
                     f"no training error recorded")
                     print("-" * 60)
                     continue
-
+                else:
+                    if (int(c), int(a)) in cooldown_history:
+                        cooldown_recovered += 1
+                        
                 df_new = df_candidate
             
             if verbose:
@@ -1551,7 +1568,9 @@ def splitter(
             if verbose:
                 print("Optimal # of clusters reached")
             break
-            
+    print("Cooldown added:", cooldown_added)
+    print("Cooldown recovered:", cooldown_recovered)
+    print("Cooldown expired:", cooldown_expired)   
     split_bar.close()
     
     # in the case that threshold prevents any values from passing, use backup
