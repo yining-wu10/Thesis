@@ -222,6 +222,7 @@ def findContradictionStochastic(df, th, p_feats):
 
 
 # Runtime DEBUG version using L-infinity distance
+'''
 def findContradictionStochastic(df, th, p_feats):
     t0_total = time.perf_counter()
 
@@ -311,7 +312,7 @@ def findContradictionStochastic(df, th, p_feats):
         return (-1, -1)
 
     return scores.idxmax()
-
+'''
 
 
 
@@ -380,7 +381,6 @@ def findContradictionStochastic(df, th, p_feats):
 '''
 
 # Runtime DEBUG 
-'''
 def findContradictionStochastic(df, th, p_feats):
     t0_total = time.perf_counter()
 
@@ -473,7 +473,7 @@ def findContradictionStochastic(df, th, p_feats):
         return (-1, -1)
 
     return stds.idxmax()
-'''
+
 
 
 def findContradiction(df, th, verbose=False):
