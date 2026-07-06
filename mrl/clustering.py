@@ -166,6 +166,156 @@ def initializeClusters(
     return df
 
 
+# Stochastic find contradiction (s,a) using L-infinity distance
+'''
+def findContradictionStochastic(df, th, p_feats):
+    """
+    Stochastic contradiction finder using normalized L-infinity distance.
+
+    For each (CLUSTER, ACTION):
+        1. Fit classifier: features -> NEXT_CLUSTER
+        2. Estimate P_hat(x, ·) by predict_proba
+        3. Compute max L∞ distance from each P_hat(x, ·) to mean P_hat(·)
+        4. Return the (CLUSTER, ACTION) with largest score
+
+    th:
+        normalized threshold in [0, 1]
+    """
+
+    X = df[df.NEXT_CLUSTER != "None"]
+
+    def score_group(df_group):
+        X_regr = df_group.iloc[:, 2 : p_feats + 2]
+        y_raw = df_group["NEXT_CLUSTER"]
+
+        encoder = LabelEncoder()
+        y = encoder.fit_transform(y_raw)
+
+        if len(np.unique(y)) <= 1:
+            return 0.0
+
+        clf = DecisionTreeClassifier(
+            max_depth=None,
+            min_samples_leaf=1,
+            random_state=0,
+        )
+        clf.fit(X_regr, y)
+
+        P_hat = clf.predict_proba(X_regr)
+
+        mean_P = P_hat.mean(axis=0)
+
+        distances = np.max(
+            np.abs(P_hat - mean_P),
+            axis=1,
+        )
+
+        return float(distances.max())
+
+    scores = X.groupby(["CLUSTER", "ACTION"]).apply(score_group)
+
+    if scores.empty or scores.max() < th:
+        return (-1, -1)
+
+    return scores.idxmax()
+'''
+
+
+# Runtime DEBUG version using L-infinity distance
+def findContradictionStochastic(df, th, p_feats):
+    t0_total = time.perf_counter()
+
+    X = df[df.NEXT_CLUSTER != "None"]
+
+    print("\n[findContradictionStochastic_fast]")
+    print("rows:", len(X))
+    print("clusters:", X["CLUSTER"].nunique())
+    print("actions:", X["ACTION"].nunique())
+    print("groups:", X.groupby(["CLUSTER", "ACTION"]).ngroups)
+
+    timing = {
+        "slice": 0.0,
+        "encode": 0.0,
+        "fit": 0.0,
+        "predict": 0.0,
+        "score": 0.0,
+        "groups": 0,
+        "single_class_groups": 0,
+    }
+
+    def score_group(g):
+        timing["groups"] += 1
+
+        t0 = time.perf_counter()
+        X_regr = g.iloc[:, 2 : p_feats + 2]
+        y_raw = g["NEXT_CLUSTER"]
+        timing["slice"] += time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        encoder = LabelEncoder()
+        y = encoder.fit_transform(y_raw)
+        timing["encode"] += time.perf_counter() - t0
+
+        if len(np.unique(y)) < 2:
+            timing["single_class_groups"] += 1
+            return 0.0
+
+        t0 = time.perf_counter()
+        clf = DecisionTreeClassifier(
+            max_depth=None,
+            min_samples_leaf=1,
+            random_state=0,
+        )
+        clf.fit(X_regr, y)
+        timing["fit"] += time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        P_hat = clf.predict_proba(X_regr)
+        timing["predict"] += time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        mean_P = P_hat.mean(axis=0)
+        distances = np.max(np.abs(P_hat - mean_P), axis=1)
+        score = float(distances.max())
+        timing["score"] += time.perf_counter() - t0
+
+        return score
+
+    t0 = time.perf_counter()
+    scores = X.groupby(["CLUSTER", "ACTION"]).apply(score_group)
+    groupby_time = time.perf_counter() - t0
+
+    max_score = scores.max()
+    total_time = time.perf_counter() - t0_total
+
+    print("max score:", max_score)
+    print("threshold:", th)
+    print("will stop:", max_score < th)
+    print("chosen:", (-1, -1) if max_score < th else scores.idxmax())
+
+    print("\n[timing seconds]")
+    print("groupby_apply_total:", round(groupby_time, 4))
+    print("slice:", round(timing["slice"], 4))
+    print("encode:", round(timing["encode"], 4))
+    print("fit:", round(timing["fit"], 4))
+    print("predict:", round(timing["predict"], 4))
+    print("score:", round(timing["score"], 4))
+    print("total:", round(total_time, 4))
+
+    print("\n[group info]")
+    print("groups:", timing["groups"])
+    print("single_class_groups:", timing["single_class_groups"])
+    print("multi_class_groups:", timing["groups"] - timing["single_class_groups"])
+
+    if scores.empty or max_score < th:
+        return (-1, -1)
+
+    return scores.idxmax()
+
+
+
+
+
 # Function for the Iterations
 '''
 def findContradictionStochastic(df, th, p_feats):
@@ -230,6 +380,7 @@ def findContradictionStochastic(df, th, p_feats):
 '''
 
 # Runtime DEBUG 
+'''
 def findContradictionStochastic(df, th, p_feats):
     t0_total = time.perf_counter()
 
@@ -322,7 +473,7 @@ def findContradictionStochastic(df, th, p_feats):
         return (-1, -1)
 
     return stds.idxmax()
-
+'''
 
 
 def findContradiction(df, th, verbose=False):
