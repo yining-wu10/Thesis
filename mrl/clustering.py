@@ -433,12 +433,11 @@ def findContradictionStochastic(df, th, p_feats):
         timing["predict"] += time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        raw_score = sum(
+        score = sum(
             np.std(y_preds, axis=0)
             *
             np.bincount(y_regr, minlength=y_preds.shape[1])
         )
-        score = raw_score / len(g)
         
         timing["score"] += time.perf_counter() - t0
 
@@ -452,7 +451,7 @@ def findContradictionStochastic(df, th, p_feats):
 
     total_time = time.perf_counter() - t0_total
 
-    print("max normalized std:", max_std)
+    print("max std:", max_std)
     print("threshold:", th)
     print("will stop:", max_std < th)
     print("chosen:", (-1, -1) if max_std < th else stds.idxmax())
