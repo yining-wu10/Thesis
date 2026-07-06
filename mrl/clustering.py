@@ -796,7 +796,7 @@ def cluster_update(df, ids, k):
     ] = k
     return df
 
-'''
+
 def splitter(
     df: pd.DataFrame,
     pfeatures: int,
@@ -1164,11 +1164,12 @@ def splitter(
         split_scores,
         training_error,
     )
-'''
+
 
 
 
 # Runtime DEBUG
+'''
 def splitter(
     df: pd.DataFrame,
     pfeatures: int,
@@ -1643,7 +1644,7 @@ def splitter(
         split_scores,
         training_error,
     )
-
+'''
 
 
 # Splitter algorithm with Group K-fold cross-validation (number of folds from param cv)
