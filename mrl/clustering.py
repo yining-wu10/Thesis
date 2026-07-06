@@ -1255,7 +1255,6 @@ def splitter(
 
     k = df["CLUSTER"].nunique()  # initial number of clusters
     nc = k  # number of clusters
-
     df_new = deepcopy(df)
 
     # storing optimal df
@@ -1268,31 +1267,59 @@ def splitter(
     backup_df = None
     backup_opt_k = None
 
+    # Cooldown blacklist ==============
+    cooldown = {}
+    cooldown_rounds = 3
+
+    def update_cooldown(cooldown_dict):
+        expired = []
+        for pair in cooldown_dict:
+            cooldown_dict[pair] -= 1
+            if cooldown_dict[pair] <= 0:
+                expired.append(pair)
+        for pair in expired:
+            del cooldown_dict[pair]
+            
     # Setting progress bar--------------
-    split_bar = tqdm(range(max_k - k))
+    success_iter = 0
+    split_bar = tqdm(total=max_k - k)
     split_bar.set_description("Splitting...")
 
     # Setting progress bar--------------
-    for i in split_bar:
+    while nc < max_k:
         split_bar.set_description("Splitting... |#Clusters:%s" % (nc))
         cont = False
         if verbose:
             print("Finding contradiction...")
 
         iter_t0 = time.perf_counter()
+        t_split = 0.0
+        t_train_error = 0.0
+
+        # Use df_for_find to skip cooldown pairs ==============
+        df_for_find = df_new
+        if stochastic and len(cooldown) > 0:
+            df_for_find = df_new.copy()
+            for c_skip, a_skip in cooldown.keys():
+                mask = (
+                    (df_for_find["CLUSTER"] == c_skip)
+                    & (df_for_find["ACTION"] == a_skip)
+                )
+                df_for_find.loc[mask, "NEXT_CLUSTER"] = "None"
+                
         t0 = time.perf_counter()
         if not stochastic:
             c, a = findContradiction(df_new, th)
         else:
-            c, a = findContradictionStochastic(df_new, th, pfeatures)
+            c, a = findContradictionStochastic(df_for_find, th, pfeatures)
         t_find = time.perf_counter() - t0
-        print(f"\n[ITER {i}]")
+        print(f"\n[ITER {success_iter}]")
         print(f"[time] find contradiction: {t_find:.4f}s")
         print(f"[chosen] c={c}, a={a}")
         print(f"[clusters before] actual={df_new['CLUSTER'].nunique()}, nc={nc}")
         
-        if verbose:
-            print(f"Found contradiction in {time.time()-st}!")
+        # if verbose:
+        #     print(f"Found contradiction in {time.time()-st}!")
 
         gc.collect()
         if (
@@ -1301,7 +1328,7 @@ def splitter(
 
             # print("Splitting...")
             st = time.time()
-
+            
             if not stochastic:
                 # finding contradictions and splitting
                 a, b = contradiction(df_new, c, a)
@@ -1332,8 +1359,9 @@ def splitter(
                 t0 = time.perf_counter()
                 before_nclus = df_new["CLUSTER"].nunique()
                 before_rows = df_new["CLUSTER"].value_counts()
-                
-                df_new = splitStochastic(
+                df_before_split = df_new.copy()
+
+                df_candidate = splitStochastic(
                     df_new,
                     c,
                     a,
@@ -1344,24 +1372,44 @@ def splitter(
                     split_classifier_params,
                 )
                 t_split = time.perf_counter() - t0
-                after_nclus = df_new["CLUSTER"].nunique()
-                after_rows = df_new["CLUSTER"].value_counts()
+                after_nclus = df_candidate["CLUSTER"].nunique()
+                after_rows = df_candidate["CLUSTER"].value_counts()
 
+                split_success = (
+                    after_nclus > before_nclus
+                    and after_rows.get(nc, 0) > 0
+                    and after_rows.get(c, 0) > 0
+                )
                 print(f"[time] splitStochastic: {t_split:.4f}s")
                 print(f"[clusters after] actual={after_nclus}, nc={nc}")
-                print(f"[split success] {after_nclus > before_nclus}")
+                print(f"[split success] {split_success}")
                 print(f"[old cluster {c}] before={before_rows.get(c, 0)}, after={after_rows.get(c, 0)}")
                 print(f"[new cluster {nc}] size={after_rows.get(nc, 0)}")
+
+                if not split_success:
+                    df_new = df_before_split
+
+                    # Failed pair enters cooldown ==============
+                    cooldown[(int(c), int(a))] = cooldown_rounds
+                    update_cooldown(cooldown)
+                    print(
+                    f"[skip] split failed; pair {(int(c), int(a))} "
+                    f"cooldown={cooldown_rounds}; nc unchanged; "
+                    f"no training error recorded")
+                    print("-" * 60)
+                    continue
+
+                df_new = df_candidate
             
             if verbose:
                 print(f"Split clusters in {time.time() - st}!")
             
             if save_epoch and (
-                i % save_every == 0
+                success_iter % save_every == 0
             ):  # don't want to keep saving huge disk usage
                 if verbose:
                     print("Saving checkpoint")
-                df_new.to_csv(save_path / f"df_epoch_{i}.csv")
+                df_new.to_csv(save_path / f"df_epoch_{success_iter}.csv")
 
             if verbose:
                 print("Calculating Incoherences...")
@@ -1481,20 +1529,31 @@ def splitter(
 
             cont = True
             nc += 1
+            success_iter += 1
+            split_bar.update(1)
             if verbose:
                 print(f"Model saved in {time.time()-st}")
+            # Successful iteration also reduces cooldown =========
+            update_cooldown(cooldown)
+
             iter_total = time.perf_counter() - iter_t0
             other_time = iter_total - t_find - t_split - t_train_error
+
             print(f"[time] iteration total: {iter_total:.4f}s")
             print(f"[time] unaccounted other: {other_time:.4f}s")
             print("-" * 60)
         if not cont:
+            if stochastic and len(cooldown) > 0:
+                update_cooldown(cooldown)
+                continue
             break
         if nc >= max_k:
             if verbose:
                 print("Optimal # of clusters reached")
             break
-
+            
+    split_bar.close()
+    
     # in the case that threshold prevents any values from passing, use backup
     if opt_k == None:
         opt_k = backup_opt_k
@@ -1503,7 +1562,7 @@ def splitter(
 
     # plotting functions
     # Plotting accuracy and value R2
-    its = np.arange(k + 1, nc + 1)
+    its = np.arange(k + 1, k + 1 + len(training_error))
     if plot:
         if grid and not stochastic:
             fig1, ax1 = plt.subplots()
@@ -1565,6 +1624,8 @@ def splitter(
         split_scores,
         training_error,
     )
+
+
 
 # Splitter algorithm with Group K-fold cross-validation (number of folds from param cv)
 # Returns dataframes of incoherences, errors, and splitter split-scores; these
