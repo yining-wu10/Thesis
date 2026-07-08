@@ -614,6 +614,7 @@ def splitStochastic(
     X = df[(df["CLUSTER"] == i) & (df["ACTION"] == a)]
     X = X[X["NEXT_CLUSTER"] != "None"]
     unlabeled_part = df[df["CLUSTER"] == i]
+    seed = split_classifier_params.get("random_state", 0)
 
     # Step 1. Use regression to smooth the observations
     X_regr = X.iloc[:, 2 : p_feats + 2]
@@ -622,12 +623,15 @@ def splitStochastic(
     y_regr = encoder.fit_transform(y_regr_raw)
     scaler = MinMaxScaler()
     X_regr_normalized = scaler.fit_transform(X_regr)
-    regressor = DecisionTreeClassifier()
+    regressor = DecisionTreeClassifier(random_state=seed)
     regressor.fit(X_regr_normalized, y_regr)
     y_preds = regressor.predict_proba(X_regr_normalized)
 
     # Step 2. Use K-Means Clustering to split the predicted probabilities to find ideal split groups
-    clusterer = KMeans(n_clusters=nsplits)
+    clusterer = KMeans(
+        n_clusters=nsplits, 
+        random_state=seed
+    )
     target_groups = clusterer.fit_predict(y_preds)
     X.insert(X.shape[1], "LABEL", target_groups)
 
