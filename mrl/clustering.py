@@ -316,7 +316,7 @@ def findContradictionStochastic(df, th, p_feats):
 
 
 
-
+# Original version
 # Function for the Iterations
 '''
 def findContradictionStochastic(df, th, p_feats):
@@ -380,7 +380,9 @@ def findContradictionStochastic(df, th, p_feats):
     return stds.idxmax()
 '''
 
+
 # Runtime DEBUG 
+'''
 def findContradictionStochastic(df, th, p_feats):
     t0_total = time.perf_counter()
 
@@ -474,6 +476,65 @@ def findContradictionStochastic(df, th, p_feats):
         return (-1, -1)
 
     return stds.idxmax()
+'''
+
+
+# Runtime DEBUG + global classifier
+def _make_global_X(df_part, p_feats, fixed_action=None):
+    X_feat = df_part.iloc[:, 2 : p_feats + 2].copy()
+
+    if fixed_action is None:
+        X_feat["ACTION_CODE"] = df_part["ACTION"].astype(int).to_numpy()
+    else:
+        X_feat["ACTION_CODE"] = int(fixed_action)
+
+    return X_feat
+
+
+def findContradictionStochastic(df, th, p_feats):
+    X = df[(df["NEXT_CLUSTER"] != "None")].copy()
+
+    y_raw = X["NEXT_CLUSTER"]
+
+    y_encoder = LabelEncoder()
+    y = y_encoder.fit_transform(y_raw)
+
+    X_global = _make_global_X(X, p_feats)
+
+    global_clf = DecisionTreeClassifier(
+        max_depth=None,
+        min_samples_leaf=1,
+        random_state=0,
+    )
+    global_clf.fit(X_global, y)
+
+    def score_group(g):
+        if g["NEXT_CLUSTER"].nunique() < 2:
+            return 0.0
+
+        X_g = _make_global_X(g, p_feats)
+        P_hat = global_clf.predict_proba(X_g)
+
+        y_g = y_encoder.transform(g["NEXT_CLUSTER"])
+        weights = np.bincount(y_g, minlength=P_hat.shape[1])
+
+        score = np.sum(np.std(P_hat, axis=0) * weights)
+        return float(score)
+
+    stds = X.groupby(["CLUSTER", "ACTION"]).apply(score_group)
+
+    max_std = stds.max()
+
+    print("max std:", max_std)
+    print("threshold:", th)
+    print("will stop:", max_std < th)
+    print("chosen:", (-1, -1) if max_std < th else stds.idxmax())
+
+    if max_std < th:
+        return -1, -1, global_clf
+
+    c, a = stds.idxmax()
+    return c, a, global_clf
 
 
 
@@ -591,6 +652,8 @@ def parse_classifier(
     raise ValueError("Incorrect Classifier Type")
 
 
+# Original version
+'''
 def splitStochastic(
     df, i, a, p_feats, k, nsplits, classification, split_classifier_params
 ):
@@ -650,6 +713,54 @@ def splitStochastic(
     m = parse_classifier(classification, split_classifier_params)
     df, score = split_postlabel(df, X, unlabeled_part, m, nsplits, k, p_feats, i)
     return df
+'''
+
+
+# global classifier
+def splitStochastic(
+    df, i, a, p_feats, k, nsplits, classification, split_classifier_params, global_clf
+):
+    X = df[
+        (df["CLUSTER"] == i) &
+        (df["NEXT_CLUSTER"] != "None")
+    ].copy()
+
+    if len(X) < nsplits:
+        return df
+
+    X_pred = _make_global_X(X, p_feats, fixed_action=a)
+
+    y_preds = global_clf.predict_proba(X_pred)
+
+    seed = split_classifier_params.get("random_state", 0)
+
+    clusterer = KMeans(
+        n_clusters=nsplits,
+        random_state=seed,
+    )
+
+    target_groups = clusterer.fit_predict(y_preds)
+
+    if len(np.unique(target_groups)) < 2:
+        return df
+
+    X["LABEL"] = target_groups
+
+    ids_new = X.loc[X["LABEL"] == 1].index.values
+
+    if len(ids_new) == 0 or len(ids_new) == len(X):
+        return df
+
+    assert (
+        df.loc[df.index.isin(ids_new), "CLUSTER"] == i
+    ).all(), "trying to reassign cluster to points out of original cluster"
+
+    cluster_update(df, ids_new, k)
+
+    return df
+
+
+
 
 
 def split(
@@ -696,6 +807,7 @@ def split(
         df, labeled_parts, unlabeled_parts, m, 2, k, pfeatures, i
     )
     return df, score
+
 
 
 def split_postlabel(
@@ -801,7 +913,7 @@ def cluster_update(df, ids, k):
     ] = k
     return df
 
-'''
+
 def splitter(
     df: pd.DataFrame,
     pfeatures: int,
@@ -916,7 +1028,7 @@ def splitter(
         if not stochastic:
             c, a = findContradiction(df_new, th)
         else:
-            c, a = findContradictionStochastic(df_new, th, pfeatures)
+            c, a, global_clf = findContradictionStochastic(df_new, th, pfeatures)
 
         if verbose:
             print(f"Found contradiction in {time.time()-st}!")
@@ -956,6 +1068,9 @@ def splitter(
             else:
                 if verbose:
                     print("Cluster splitted", c, "| Action causing contradiction:", a)
+                before_nclus = df_new["CLUSTER"].nunique()
+                before_rows = df_new["CLUSTER"].value_counts()
+                
                 df_new = splitStochastic(
                     df_new,
                     c,
@@ -965,8 +1080,23 @@ def splitter(
                     2,
                     classification,
                     split_classifier_params,
+                    global_clf,
                 )
 
+                after_nclus = df_new["CLUSTER"].nunique()
+                after_rows = df_new["CLUSTER"].value_counts()
+    
+                split_success = (
+                    after_nclus > before_nclus
+                    and after_rows.get(nc, 0) > 0
+                    and after_rows.get(c, 0) > 0
+                )
+                
+                if not split_success:
+                    print(f"Split Failed")
+                    break
+                print(f"Split Success")
+            
             if verbose:
                 print(f"Split clusters in {time.time() - st}!")
 
@@ -1169,11 +1299,12 @@ def splitter(
         split_scores,
         training_error,
     )
+
+
+
+
+# Runtime DEBUG + Cooldown
 '''
-
-
-
-# Runtime DEBUG
 def splitter(
     df: pd.DataFrame,
     pfeatures: int,
@@ -1648,7 +1779,7 @@ def splitter(
         split_scores,
         training_error,
     )
-
+'''
 
 
 # Splitter algorithm with Group K-fold cross-validation (number of folds from param cv)
