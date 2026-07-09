@@ -277,7 +277,10 @@ def training_value_error(
     eval_samples=None,
     num_sims=20,
     stochastic=False,
+    random_state=0,
 ):
+    rng = np.random.default_rng(random_state)
+    
     E_v = 0.0
 
     if stochastic:
@@ -321,14 +324,14 @@ def training_value_error(
                 "If eval_samples is a float, it must be in (0, 1]."
             )
         n_eval = max(1, int(N_train * eval_samples))
-        eval_ids = np.random.default_rng().choice(
+        eval_ids = rng.choice(
             N_train,
             size=n_eval,
             replace=False,
         )
 
     else:
-        eval_ids = np.random.default_rng().choice(
+        eval_ids = rng.choice(
             N_train,
             size=eval_samples,
             replace=False,
@@ -389,7 +392,7 @@ def training_value_error(
                     if not stochastic:
                         s = P_df.loc[s, a].values[0]
                     else:
-                        s = sim_next_cluster_fast(P_lookup, s, a)
+                        s = sim_next_cluster_fast(P_lookup, s, a, rng)
                 except Exception:
                     # Same behavior as original code: if transition is unseen, keep current s
                     pass
@@ -547,7 +550,7 @@ def build_transition_lookup(P_df):
     return P_lookup
 
 
-def sim_next_cluster_fast(P_lookup, s, a):
+def sim_next_cluster_fast(P_lookup, s, a, rng):
     """
     Fast stochastic next-cluster sampling.
     """
@@ -557,8 +560,8 @@ def sim_next_cluster_fast(P_lookup, s, a):
         raise ValueError("Transition Action not observed")
 
     next_clusters, probs = P_lookup[key]
-
-    rand = np.random.random()
+    
+    rand = rng.random()
     agg = 0.0
 
     for nc, p in zip(next_clusters, probs):
