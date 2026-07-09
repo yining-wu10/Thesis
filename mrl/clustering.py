@@ -492,7 +492,10 @@ def _make_global_X(df_part, p_feats, fixed_action=None):
 
 
 def findContradictionStochastic(df, th, p_feats):
-    X = df[(df["NEXT_CLUSTER"] != "None")].copy()
+    X = df[
+        (df["NEXT_CLUSTER"] != "None") &
+        (df["ACTION"] != "None")
+    ].copy()
 
     y_raw = X["NEXT_CLUSTER"]
 
@@ -722,7 +725,8 @@ def splitStochastic(
 ):
     X = df[
         (df["CLUSTER"] == i) &
-        (df["NEXT_CLUSTER"] != "None")
+        (df["NEXT_CLUSTER"] != "None") &
+        (df["ACTION"] != "None")
     ].copy()
 
     if len(X) < nsplits:
