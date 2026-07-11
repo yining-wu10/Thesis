@@ -487,37 +487,38 @@ class MDP_model:
             - The remapping is kept local to this function so it can be removed easily
               if splitter is later fixed.
         """
-        def remap_state_indices(P_df, R_df):
-            """
-            Remap state labels in P_df and R_df to consecutive integers.
-            Input:
-                P_df columns: CLUSTER, ACTION, NEXT_CLUSTER, PROBABILITY
-                R_df: index = original cluster/state labels, value = reward
-            Output:
-                P_df_remap: CLUSTER and NEXT_CLUSTER remapped to 0,1,...,n-1
-                R_df_remap: index remapped to 0,1,...,n-1
-                state_map: old_state -> new_state
-                inverse_state_map: new_state -> old_state
-            """
         
-            P_df = P_df.copy()
-            R_df = R_df.copy()
+        # def remap_state_indices(P_df, R_df):
+            # """
+            # Remap state labels in P_df and R_df to consecutive integers.
+            # Input:
+                # P_df columns: CLUSTER, ACTION, NEXT_CLUSTER, PROBABILITY
+                # R_df: index = original cluster/state labels, value = reward
+            # Output:
+                # P_df_remap: CLUSTER and NEXT_CLUSTER remapped to 0,1,...,n-1
+                # R_df_remap: index remapped to 0,1,...,n-1
+                # state_map: old_state -> new_state
+                # inverse_state_map: new_state -> old_state
+            # """
         
-            all_states = sorted(
-                set(P_df["CLUSTER"].astype(int))
-                | set(P_df["NEXT_CLUSTER"].astype(int))
-                | set(R_df.index.astype(int))
-            )
+            # P_df = P_df.copy()
+            # R_df = R_df.copy()
         
-            state_map = {old: new for new, old in enumerate(all_states)}
-            inverse_state_map = {new: old for old, new in state_map.items()}
+            # all_states = sorted(
+                # set(P_df["CLUSTER"].astype(int))
+                # | set(P_df["NEXT_CLUSTER"].astype(int))
+                # | set(R_df.index.astype(int))
+            # )
         
-            P_df["CLUSTER"] = P_df["CLUSTER"].astype(int).map(state_map)
-            P_df["NEXT_CLUSTER"] = P_df["NEXT_CLUSTER"].astype(int).map(state_map)
+            # state_map = {old: new for new, old in enumerate(all_states)}
+            # inverse_state_map = {new: old for old, new in state_map.items()}
         
-            R_df = R_df.rename(index=state_map).sort_index()
+            # P_df["CLUSTER"] = P_df["CLUSTER"].astype(int).map(state_map)
+            # P_df["NEXT_CLUSTER"] = P_df["NEXT_CLUSTER"].astype(int).map(state_map)
         
-            return P_df, R_df, state_map, inverse_state_map
+            # R_df = R_df.rename(index=state_map).sort_index()
+        
+            # return P_df, R_df, state_map, inverse_state_map
 
         
         
@@ -534,13 +535,13 @@ class MDP_model:
         )
 
         # locally remap non-contiguous state labels
-        P_df, R_df, state_map, inverse_state_map = remap_state_indices(P_df, R_df)
+        # P_df, R_df, state_map, inverse_state_map = remap_state_indices(P_df, R_df)
         
         # store mapping for interpretation/debugging
-        self.state_map = state_map
-        self.inverse_state_map = inverse_state_map
+        # self.state_map = state_map
+        # self.inverse_state_map = inverse_state_map
         
-        P_df = P_df.reset_index(drop=True)
+        # P_df = P_df.reset_index(drop=True)
         
         # raise RuntimeError(
         #    f"\nP_df columns: {list(P_df.columns)}\n"
@@ -560,7 +561,7 @@ class MDP_model:
         assert set(P_df["NEXT_CLUSTER"]).issubset(set(R_df.index))
 
         # Take out rows where actions or purity below threshold
-        P_thresh = P_df.loc[(P_df["count"] > min_action_obs)]
+        P_thresh = P_df.loc[(P_df["count"] >= min_action_obs)]
 
         # Take note of rows where we have missing actions:
         action_counts = P_df.groupby("CLUSTER")["ACTION"].nunique()
@@ -584,7 +585,7 @@ class MDP_model:
             P[u, c, t] = p
 
         # reinsert transition for cluster/action pairs taken out by count threshold
-        excl = P_df.loc[P_df["count"] <= min_action_obs]
+        excl = P_df.loc[P_df["count"] < min_action_obs]
 
         for row in excl.itertuples():
             c = row.CLUSTER
@@ -621,7 +622,7 @@ class MDP_model:
         self.t_max = T_max
         self.r_max = r_max
 
-        # use remapped R_df, not self.R_df
+        
         base_R = np.array(R_df)
         for i in range(a):
             if prob == "max":
