@@ -294,13 +294,14 @@ def mrl_model_to_prob_array(
             diabetic_idx=diabetic_idx,
         )
 
-        raw_cluster = int(model.m.predict([features])[0])
+        cluster = int(model.m.predict([features])[0])
 
         # raw cluster label -> remapped pi index
-        if hasattr(model, "state_map"):
-            cluster = model.state_map[raw_cluster]
-        else:
-            cluster = raw_cluster
+        # raw_cluster = int(model.m.predict([features])[0])
+        # if hasattr(model, "state_map"):
+            # cluster = model.state_map[raw_cluster]
+        # else:
+            # cluster = raw_cluster
 
         action_idx = int(model.pi[cluster])
         policy_array[state_idx, action_idx] = 1.0
