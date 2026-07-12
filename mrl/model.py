@@ -333,6 +333,7 @@ class MDP_model:
             opt_k,
             split_scores,
             stoc_training_error,
+            max_std_history,
         ) = splitter(
             df_init,
             pfeatures=self.pfeatures,
