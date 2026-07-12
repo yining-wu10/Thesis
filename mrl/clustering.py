@@ -490,7 +490,7 @@ def _make_global_X(df_part, p_feats, fixed_action=None):
 
     return X_feat
 
-
+'''
 def findContradictionStochastic(df, th, p_feats):
     X = df[
         (df["NEXT_CLUSTER"] != "None") &
@@ -538,6 +538,99 @@ def findContradictionStochastic(df, th, p_feats):
 
     c, a = stds.idxmax()
     return c, a, global_clf
+'''
+
+def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
+    """
+    th:
+        Relative threshold in (0, 1].
+        Example: th=0.05 means stopping when current max_std
+        is at most 5% of the historical maximum.
+    """
+    X = df[
+        (df["NEXT_CLUSTER"] != "None") &
+        (df["ACTION"] != "None")
+    ].copy()
+
+    y_raw = X["NEXT_CLUSTER"]
+
+    y_encoder = LabelEncoder()
+    y = y_encoder.fit_transform(y_raw)
+
+    X_global = _make_global_X(X, p_feats)
+
+    global_clf = DecisionTreeClassifier(
+        max_depth=None,
+        min_samples_leaf=1,
+        random_state=0,
+    )
+    global_clf.fit(X_global, y)
+
+    def score_group(g):
+        if g["NEXT_CLUSTER"].nunique() < 2:
+            return 0.0
+
+        X_g = _make_global_X(g, p_feats)
+        P_hat = global_clf.predict_proba(X_g)
+
+        y_g = y_encoder.transform(g["NEXT_CLUSTER"])
+        weights = np.bincount(y_g, minlength=P_hat.shape[1])
+
+        score = np.sum(np.std(P_hat, axis=0) * weights)
+        return float(score)
+
+    stds = X.groupby(["CLUSTER", "ACTION"]).apply(score_group)
+
+    max_std = stds.max()
+    
+    if max_std_reference is None:
+        max_std_reference = max_std
+    else:
+        max_std_reference = max(float(max_std_reference), max_std,)
+
+    # Avoid division by zero
+    if max_std_reference == 0:
+        relative_std = 0.0
+    else:
+        relative_std = max_std / max_std_reference
+
+    should_stop = relative_std <= th
+
+    print("max std:", max_std)
+    print("historical max std:", max_std_reference)
+    print("relative max std:", relative_std)
+    print("relative threshold:", th)
+    print("will stop:", should_stop)
+    print(
+        "chosen:",
+        (-1, -1)
+        if should_stop
+        else stds.idxmax(),
+    )
+
+    if should_stop:
+        return (
+            -1,
+            -1,
+            global_clf,
+            max_std_reference,
+            max_std,
+            relative_std,
+        )
+
+    c, a = stds.idxmax()
+
+    return (
+        c,
+        a,
+        global_clf,
+        max_std_reference,
+        max_std,
+        relative_std,
+    )
+
+
+
 
 
 
@@ -921,7 +1014,7 @@ def cluster_update(df, ids, k):
 def splitter(
     df: pd.DataFrame,
     pfeatures: int,
-    th: int,
+    th: float,
     eta: int = 25,
     precision_thresh: float = 1e-14,
     df_test: pd.DataFrame = None,
@@ -955,7 +1048,7 @@ def splitter(
     Args:
         df (pd.DataFrame): The input dataframe.
         pfeatures (int): Number of features.
-        th (int): Threshold for minimum split.
+        th (float): Threshold for minimum split.
         eta (int, optional): Incoherence threshold for splits. Defaults to 25.
         precision_thresh (float, optional): Precision threshold for new minimum value error. Defaults to 1e-14.
         df_test (pd.DataFrame, optional): Test dataframe for cross-validation. Defaults to None.
@@ -1021,6 +1114,8 @@ def splitter(
     split_bar = tqdm(range(max_k - k))
     split_bar.set_description("Splitting...")
 
+    max_std_reference = None
+    max_std_history = []
     # Setting progress bar--------------
     for i in split_bar:
         split_bar.set_description("Splitting... |#Clusters:%s" % (nc))
@@ -1029,11 +1124,33 @@ def splitter(
             print("Finding contradiction...")
 
         st = time.time()
+        
         if not stochastic:
             c, a = findContradiction(df_new, th)
         else:
-            c, a, global_clf = findContradictionStochastic(df_new, th, pfeatures)
+            # c, a, global_clf = findContradictionStochastic(df_new, th, pfeatures)
+            (
+                c,
+                a,
+                global_clf,
+                max_std_reference,
+                current_max_std,
+                relative_max_std,
+            ) = findContradictionStochastic(
+                df=df_new,
+                th=th,
+                p_feats=pfeatures,
+                max_std_reference=max_std_reference,
+            )
 
+            max_std_history.append(
+                [
+                    df_new["CLUSTER"].nunique(),
+                    current_max_std,
+                    relative_max_std,
+                ]
+            )
+            
         if verbose:
             print(f"Found contradiction in {time.time()-st}!")
 
@@ -1272,7 +1389,7 @@ def splitter(
         ax2.set_title("Value error by number of clusters")
         ax2.legend()
         plt.show()
-
+    
     df_train_error = pd.DataFrame(
         list(zip(its, training_error)), columns=["Clusters", "Error"]
     )
@@ -1292,6 +1409,7 @@ def splitter(
             opt_k,
             split_scores,
             None,
+            max_std_history,
         )
     return (
         df_new,
@@ -1302,6 +1420,7 @@ def splitter(
         opt_k,
         split_scores,
         training_error,
+        max_std_history,
     )
 
 
