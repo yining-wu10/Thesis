@@ -244,7 +244,7 @@ class MDP_model:
         gamma=1,
         max_k=70,
         distance_threshold=0.05,
-        th=0,
+        th=0.05,
         eta=float("inf"),
         precision_thresh=1e-14,
         classification="DecisionTreeClassifier",
