@@ -244,7 +244,6 @@ class MDP_model:
         gamma=1,
         max_k=70,
         distance_threshold=0.05,
-        cv=5,
         th=0,
         eta=float("inf"),
         precision_thresh=1e-14,
@@ -273,7 +272,6 @@ class MDP_model:
             gamma (float, optional): Discount value. Defaults to 1.
             max_k (int, optional): Maximum number of clusters. Defaults to 70.
             distance_threshold (float, optional): Clustering diameter for Agglomerative clustering. Defaults to 0.05.
-            cv (int, optional): Number for cross-validation. Defaults to 5.
             th (int, optional): Splitting threshold. Defaults to 0.
             eta (float, optional): Incoherence threshold. Defaults to float('inf').
             precision_thresh (float, optional): Precision threshold. Defaults to 1e-14.
