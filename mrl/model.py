@@ -273,7 +273,7 @@ class MDP_model:
             max_k (int, optional): Maximum number of clusters. Defaults to 70.
             distance_threshold (float, optional): Clustering diameter for Agglomerative clustering. Defaults to 0.05.
             th (int, optional): Splitting threshold. Defaults to 0.
-            eta (float, optional): Incoherence threshold. Defaults to float('inf').
+            eta (float, optional): Only deterministic relevant. Incoherence threshold. Defaults to float('inf').
             precision_thresh (float, optional): Precision threshold. Defaults to 1e-14.
             classification (str, optional): Classification method. Defaults to 'DecisionTreeClassifier'.
             split_classifier_params (dict, optional): Parameters for the classification method. Defaults to {'random_state': 0, 'min_impurity_decrease': 0.02}.
