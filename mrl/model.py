@@ -473,7 +473,7 @@ class MDP_model:
 
 
 #------------------- Stochastic MRL -------------------#
-    def create_PR_stochastic(self, min_action_obs, prob):
+    def create_PR_stochastic(self, min_action_obs, objective):
 
         """
         Construct stochastic transition matrix P and reward matrix R.
@@ -626,7 +626,7 @@ class MDP_model:
         
         base_R = np.array(R_df)
         for i in range(a):
-            if prob == "max":
+            if objective == "max":
                 # take T-max * max(abs(reward)) * 2
                 R.append(np.append(base_R, -self.t_max * self.r_max * 2))
             else:
