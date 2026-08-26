@@ -1217,13 +1217,24 @@ def splitter(
             c, a = findContradiction(df_new, th)
         else:
             # c, a, global_clf = findContradictionStochastic(df_new, th, pfeatures)
+            #(
+            #    c,
+            #    a,
+            #    global_clf,
+            #    max_std_reference,
+            #    current_max_std,
+            #    relative_max_std,
+            #) = findContradictionStochastic(
+            #    df=df_new,
+            #    th=th,
+            #    p_feats=pfeatures,
+            #    max_std_reference=max_std_reference,
+            #)
             (
                 c,
                 a,
                 global_clf,
-                max_std_reference,
-                current_max_std,
-                relative_max_std,
+                max_dev,
             ) = findContradictionStochastic(
                 df=df_new,
                 th=th,
