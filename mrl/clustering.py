@@ -629,7 +629,89 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         relative_std,
     )
 
+'''
+std - max deviation
+'''
+def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
+    """
+    
+    """
+    X = df[
+        (df["NEXT_CLUSTER"] != "None") &
+        (df["ACTION"] != "None")
+    ].copy()
 
+    y_raw = X["NEXT_CLUSTER"]
+
+    y_encoder = LabelEncoder()
+    y = y_encoder.fit_transform(y_raw)
+
+    X_global = _make_global_X(X, p_feats)
+
+    global_clf = DecisionTreeClassifier(
+        max_depth=None,
+        min_samples_leaf=1,
+        random_state=0,
+    )
+    global_clf.fit(X_global, y)
+
+    # --- diagnostic: check whether predict_proba is degenerate ---
+    P_all = global_clf.predict_proba(X_global)
+    
+    print("P_hat sample:")
+    print(P_all[:20])
+    
+    print("unique max probabilities:")
+    print(np.unique(np.max(P_all, axis=1))[:20])
+
+
+    def score_group(g):
+        if len(g) < 2:
+            return 0.0
+    
+        X_g = _make_global_X(g, p_feats)
+        P_hat = global_clf.predict_proba(X_g)
+    
+        # For each next metastate s':
+        # max_x P_hat(x, s') - min_x P_hat(x, s')
+        prob_range = np.ptp(P_hat, axis=0)
+    
+        # Equivalent to:
+        # max_{x,y in g} ||P_hat(x, .) - P_hat(y, .)||_inf
+        return float(np.max(prob_range))
+
+    devs = X.groupby(["CLUSTER", "ACTION"]).apply(score_group)
+
+    max_dev = devs.max()
+
+    should_stop = max_dev <= th
+
+    print("max deviation:", max_dev)
+    print("threshold:", th)
+    print("will stop:", should_stop)
+    print(
+        "chosen:",
+        (-1, -1)
+        if should_stop
+        else devs.idxmax(),
+    )
+
+    if should_stop:
+        return (
+            -1,
+            -1,
+            global_clf,
+            max_dev,
+        )
+
+    c, a = devs.idxmax()
+
+    return (
+        c,
+        a,
+        global_clf,
+        max_dev,
+    )
 
 
 
