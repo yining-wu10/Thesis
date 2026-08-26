@@ -540,6 +540,9 @@ def findContradictionStochastic(df, th, p_feats):
     return c, a, global_clf
 '''
 
+
+
+'''
 def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     """
     th:
@@ -628,6 +631,9 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         max_std,
         relative_std,
     )
+'''
+
+
 
 '''
 std - max deviation
