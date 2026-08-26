@@ -1,2 +1,5 @@
 Git_Command.ipynb
-Git_Command.ipynb
+venv/
+.idea/
+__pycache__/
+*.pyc
