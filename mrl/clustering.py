@@ -1242,13 +1242,13 @@ def splitter(
                 max_std_reference=max_std_reference,
             )
 
-            max_std_history.append(
-                [
-                    df_new["CLUSTER"].nunique(),
-                    current_max_std,
-                    relative_max_std,
-                ]
-            )
+            #max_std_history.append(
+            #    [
+            #        df_new["CLUSTER"].nunique(),
+            #        current_max_std,
+            #        relative_max_std,
+            #    ]
+            #)
             
         if verbose:
             print(f"Found contradiction in {time.time()-st}!")
