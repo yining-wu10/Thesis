@@ -195,7 +195,7 @@ class MDP_model:
             opt_k,
             split_scores,
             stoc_training_error,
-            max_std_history,
+            max_dev_history,
         ) = splitter(
             df_init,
             pfeatures=self.pfeatures,
@@ -332,7 +332,7 @@ class MDP_model:
             opt_k,
             split_scores,
             stoc_training_error,
-            max_std_history,
+            max_dev_history,
         ) = splitter(
             df_init,
             pfeatures=self.pfeatures,
@@ -359,7 +359,7 @@ class MDP_model:
         self.training_error = training_error
         self.incoherences = df_incoherences
         self.split_scores = split_scores
-        self.max_std_history = max_std_history
+        self.max_dev_history = max_dev_history
 
         # storing trained dataset and predict_cluster function, depending on
         # whether optimization was selected
