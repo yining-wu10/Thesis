@@ -429,7 +429,9 @@ def findContradictionStochastic(df, th, p_feats):
     )
     
     global_clf.fit(X_global, y)
-
+    
+    print(global_clf.n_iter_)
+    
     assert np.array_equal(
         global_clf.classes_,
         np.arange(len(y_encoder.classes_))
