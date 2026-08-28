@@ -601,6 +601,12 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     else:
         relative_std = max_std / max_std_reference
 
+    abs_tol = 1e-8
+
+    should_stop = (
+        max_std <= abs_tol
+        or relative_std <= th
+    )
     should_stop = relative_std <= th
 
     print("max std:", max_std)
