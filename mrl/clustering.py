@@ -565,8 +565,8 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     global_clf = MLPClassifier(
         (10,),
         "relu",
-        alpha=0.05,
-        learning_rate_init=0.2,
+        alpha=1e-4,
+        learning_rate_init=1e-3,
         tol=1e-3,
         random_state=0,
     )
