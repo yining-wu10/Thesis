@@ -582,6 +582,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
 
         y_g = y_encoder.transform(g["NEXT_CLUSTER"])
         weights = np.bincount(y_g, minlength=P_hat.shape[1])
+        weights = weights / weights.sum()
 
         score = np.sum(np.std(P_hat, axis=0) * weights)
         return float(score)
