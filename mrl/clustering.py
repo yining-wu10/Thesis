@@ -422,7 +422,7 @@ def findContradictionStochastic(df, th, p_feats):
     # global_clf = MLPClassifier((10,), "relu", alpha=1e-4, learning_rate_init=1e-3, tol=1e-3, random_state=0,)
 
     global_clf = MLPClassifier(
-        hidden_layer_sizes=(10,),
+        (10,),
         "relu",
         tol=1e-3,
         random_state=0,
