@@ -1493,7 +1493,7 @@ def splitter(
             opt_k,
             split_scores,
             None,
-            max_std_history,
+            max_dev_history,
         )
     return (
         df_new,
@@ -1504,7 +1504,7 @@ def splitter(
         opt_k,
         split_scores,
         training_error,
-        max_std_history,
+        max_dev_history,
     )
 
 
