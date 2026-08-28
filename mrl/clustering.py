@@ -649,7 +649,7 @@ def findContradictionStochastic(df, th, p_feats):
 
     X_global = _make_global_X(X, p_feats)
 
-    global_clf = DecisionTreeClassifier(max_depth=None, min_samples_leaf=10, random_state=0,)
+    global_clf = DecisionTreeClassifier(max_depth=None, min_samples_leaf=1, random_state=0,)
 
     # global_clf = MLPClassifier(
     #    (10,),
