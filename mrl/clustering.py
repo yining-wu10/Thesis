@@ -543,12 +543,14 @@ def findContradictionStochastic(df, th, p_feats):
 
 
 
-def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
+def findContradictionStochastic(df, th, p_feats):
     """
     th:
-        Relative threshold in (0, 1].
-        Example: th=0.05 means stopping when current max_std
-        is at most 5% of the historical maximum.
+    Absolute threshold for the normalized stochastic
+    contradiction score.
+    
+    The algorithm stops when the maximum score over all
+    (cluster, action) pairs is less than or equal to th.
     """
     X = df[
         (df["NEXT_CLUSTER"] != "None") &
@@ -573,6 +575,11 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     
     global_clf.fit(X_global, y)
 
+    assert np.array_equal(
+        global_clf.classes_,
+        np.arange(len(y_encoder.classes_))
+    )
+
     def score_group(g):
         if g["NEXT_CLUSTER"].nunique() < 2:
             return 0.0
@@ -590,30 +597,10 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     stds = X.groupby(["CLUSTER", "ACTION"]).apply(score_group)
 
     max_std = stds.max()
-    
-    if max_std_reference is None:
-        max_std_reference = max_std
-    else:
-        max_std_reference = max(float(max_std_reference), max_std,)
-
-    # Avoid division by zero
-    if max_std_reference == 0:
-        relative_std = 0.0
-    else:
-        relative_std = max_std / max_std_reference
-
-    abs_tol = 1e-8
-
-    should_stop = (
-        max_std <= abs_tol
-        or relative_std <= th
-    )
-    should_stop = relative_std <= th
+    should_stop = max_std <= th
 
     print("max std:", max_std)
-    print("historical max std:", max_std_reference)
-    print("relative max std:", relative_std)
-    print("relative threshold:", th)
+    print("threshold:", th)
     print("will stop:", should_stop)
     print(
         "chosen:",
@@ -627,9 +614,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
             -1,
             -1,
             global_clf,
-            max_std_reference,
             max_std,
-            relative_std,
         )
 
     c, a = stds.idxmax()
@@ -638,9 +623,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         c,
         a,
         global_clf,
-        max_std_reference,
         max_std,
-        relative_std,
     )
 
 
@@ -1237,21 +1220,17 @@ def splitter(
                 c,
                 a,
                 global_clf,
-                max_std_reference,
-                current_max_std,
-                relative_max_std,
+                max_std,
             ) = findContradictionStochastic(
                 df=df_new,
                 th=th,
                 p_feats=pfeatures,
-                max_std_reference=max_std_reference,
             )
 
             max_std_history.append(
                 [
                     df_new["CLUSTER"].nunique(),
-                    current_max_std,
-                    relative_max_std,
+                    max_std,
                 ]
             )
             
