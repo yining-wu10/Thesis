@@ -1203,8 +1203,7 @@ def splitter(
     split_bar = tqdm(range(max_k - k))
     split_bar.set_description("Splitting...")
 
-    max_std_reference = None
-    max_std_history = []
+    max_dev_history = []
     # Setting progress bar--------------
     for i in split_bar:
         split_bar.set_description("Splitting... |#Clusters:%s" % (nc))
