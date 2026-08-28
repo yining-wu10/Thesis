@@ -542,7 +542,7 @@ def findContradictionStochastic(df, th, p_feats):
 
 
 
-'''
+
 def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     """
     th:
@@ -562,11 +562,15 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
 
     X_global = _make_global_X(X, p_feats)
 
-    global_clf = DecisionTreeClassifier(
-        max_depth=None,
-        min_samples_leaf=1,
+    global_clf = MLPClassifier(
+        (10,),
+        "relu",
+        alpha=0.05,
+        learning_rate_init=0.2,
+        tol=1e-3,
         random_state=0,
     )
+    
     global_clf.fit(X_global, y)
 
     def score_group(g):
@@ -631,13 +635,12 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         max_std,
         relative_std,
     )
-'''
 
 
 
+
 '''
-std - max deviation
-'''
+# std - max deviation
 def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     """
     
@@ -724,7 +727,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         global_clf,
         max_dev,
     )
-
+'''
 
 
 
