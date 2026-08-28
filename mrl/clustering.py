@@ -542,7 +542,8 @@ def findContradictionStochastic(df, th, p_feats):
 
 
 
-
+# Absolute max std + MLP
+'''
 def findContradictionStochastic(df, th, p_feats):
     """
     th:
@@ -626,13 +627,13 @@ def findContradictionStochastic(df, th, p_feats):
         global_clf,
         max_std,
     )
-
-
-
-
 '''
-# std - max deviation
-def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
+
+
+
+
+# Absolute max dev + DT
+def findContradictionStochastic(df, th, p_feats):
     """
     
     """
@@ -648,7 +649,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
 
     X_global = _make_global_X(X, p_feats)
 
-    global_clf = DecisionTreeClassifier(max_depth=None, min_samples_leaf=1, random_state=0,)
+    global_clf = DecisionTreeClassifier(max_depth=None, min_samples_leaf=10, random_state=0,)
 
     # global_clf = MLPClassifier(
     #    (10,),
@@ -718,7 +719,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         global_clf,
         max_dev,
     )
-'''
+
 
 
 
@@ -1221,17 +1222,17 @@ def splitter(
                 c,
                 a,
                 global_clf,
-                max_std,
+                max_dev,
             ) = findContradictionStochastic(
                 df=df_new,
                 th=th,
                 p_feats=pfeatures,
             )
 
-            max_std_history.append(
+            max_dev_history.append(
                 [
                     df_new["CLUSTER"].nunique(),
-                    max_std,
+                    max_dev,
                 ]
             )
             
