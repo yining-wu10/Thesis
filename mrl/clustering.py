@@ -577,6 +577,7 @@ def findContradictionStochastic(df, th, p_feats):
 '''
 
 # Relative max std + DT
+'''
 def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     """
     th:
@@ -665,7 +666,166 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         max_std,
         relative_std,
     )
+'''
 
+
+# Relative max std + DT + Diagnostic
+def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
+    """
+    th:
+        Relative threshold in (0, 1].
+        Example: th=0.05 means stopping when current max_std
+        is at most 5% of the historical maximum.
+    """
+    X = df[
+        (df["NEXT_CLUSTER"] != "None") &
+        (df["ACTION"] != "None")
+    ].copy()
+
+    y_raw = X["NEXT_CLUSTER"]
+
+    y_encoder = LabelEncoder()
+    y = y_encoder.fit_transform(y_raw)
+
+    X_global = _make_global_X(X, p_feats)
+
+    global_clf = DecisionTreeClassifier(
+        max_depth=None,
+        min_samples_leaf=1,
+        random_state=0,
+    )
+    global_clf.fit(X_global, y)
+
+    def score_group(g):
+        n_group = len(g)
+        
+        if g["NEXT_CLUSTER"].nunique() < 2:
+            return pd.Series({
+                "raw_score": 0.0,
+                "normalized_score": 0.0,
+                "n_group": int(n_group),
+            })
+
+        X_g = _make_global_X(g, p_feats)
+        P_hat = global_clf.predict_proba(X_g)
+
+        y_g = y_encoder.transform(g["NEXT_CLUSTER"])
+        weights = np.bincount(y_g, minlength=P_hat.shape[1])
+
+        raw_score = np.sum(np.std(P_hat, axis=0) * weights)
+
+        # Diagnostic score
+        normalized_weights = (weights / weights.sum())
+
+        normalized_score = np.sum(
+            np.std(P_hat, axis=0)
+            * normalized_weights
+        )
+        
+        return pd.Series({
+            "raw_score": float(raw_score),
+            "normalized_score": float(normalized_score),
+            "n_group": int(n_group),
+        })
+
+    group_scores = (
+        X
+        .groupby(
+            ["CLUSTER", "ACTION"]
+        )
+        .apply(score_group)
+    )
+
+    stds = group_scores["raw_score"]
+    max_std = stds.max()
+
+    if max_std_reference is None:
+        max_std_reference = max_std
+    else:
+        max_std_reference = max(float(max_std_reference), max_std,)
+
+    # Avoid division by zero
+    if max_std_reference == 0:
+        relative_std = 0.0
+    else:
+        relative_std = max_std / max_std_reference
+
+    should_stop = relative_std <= th
+
+    normalized_scores = (group_scores["normalized_score"])
+
+    group_sizes = (group_scores["n_group"])
+
+    # Worst normalized heterogeneity
+    normalized_max = float(normalized_scores.max())
+
+    # Distribution-level diagnostic
+    normalized_q90 = float(normalized_scores.quantile(0.90))
+
+    normalized_median = float(normalized_scores.median())
+
+    # Observation-weighted average heterogeneity
+    normalized_weighted_mean = float(
+        np.average(
+            normalized_scores,
+            weights=group_sizes,
+        )
+    )
+
+
+    coherence_diagnostic = {
+        "normalized_max":
+            normalized_max,
+        "normalized_q90":
+            normalized_q90,
+        "normalized_median":
+            normalized_median,
+        "normalized_weighted_mean":
+            normalized_weighted_mean,
+        "n_groups":
+            len(group_scores),
+    }
+
+
+    print("max weighted std:", max_std,)
+    print("historical max:", max_std_reference,)
+    print("relative max std:", relative_std,)
+    print("relative threshold:", th)
+    print("will stop:", should_stop)
+    
+    print("normalized weighted mean:", normalized_weighted_mean,)
+    print("normalized q90:", normalized_q90,)
+    print("normalized max:", normalized_max,)
+
+    print(
+        "chosen:",
+        (-1, -1)
+        if should_stop
+        else stds.idxmax(),
+    )
+
+    if should_stop:
+        return (
+            -1,
+            -1,
+            global_clf,
+            max_std_reference,
+            max_std,
+            relative_std,
+            coherence_diagnostic,
+        )
+
+    c, a = stds.idxmax()
+
+    return (
+        c,
+        a,
+        global_clf,
+        max_std_reference,
+        max_std,
+        relative_std,
+        coherence_diagnostic,
+    )
 
 
 def findContradiction(df, th, verbose=False):
@@ -1150,6 +1310,8 @@ def splitter(
 
     max_std_reference = None
     max_std_history = []
+    coherence_history = []
+    
     # Setting progress bar--------------
     for i in split_bar:
         split_bar.set_description("Splitting... |#Clusters:%s" % (nc))
@@ -1170,6 +1332,7 @@ def splitter(
                 max_std_reference,
                 current_max_std,
                 relative_max_std,
+                coherence_diagnostic,
             ) = findContradictionStochastic(
                 df=df_new,
                 th=th,
@@ -1184,6 +1347,32 @@ def splitter(
                     relative_max_std,
                 ]
             )
+
+            coherence_history.append({
+                    "K": df_new["CLUSTER"].nunique(),
+                    "max_std": current_max_std,
+                    "relative_std": relative_max_std,
+                    "normalized_max":
+                        coherence_diagnostic[
+                            "normalized_max"
+                        ],
+                    "normalized_q90":
+                        coherence_diagnostic[
+                            "normalized_q90"
+                        ],
+                    "normalized_median":
+                        coherence_diagnostic[
+                            "normalized_median"
+                        ],
+                    "normalized_weighted_mean":
+                        coherence_diagnostic[
+                            "normalized_weighted_mean"
+                        ],
+                    "n_groups":
+                        coherence_diagnostic[
+                            "n_groups"
+                        ],
+                })
             
         if verbose:
             print(f"Found contradiction in {time.time()-st}!")
@@ -1444,6 +1633,7 @@ def splitter(
             split_scores,
             None,
             max_std_history,
+            coherence_history,
         )
     return (
         df_new,
@@ -1455,6 +1645,7 @@ def splitter(
         split_scores,
         training_error,
         max_std_history,
+        coherence_history,
     )
 
 
