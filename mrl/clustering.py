@@ -670,6 +670,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
 
 
 # Relative max std + DT + Diagnostic
+'''
 def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
     """
     th:
@@ -826,6 +827,213 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
         relative_std,
         coherence_diagnostic,
     )
+'''
+
+
+
+# Absolute weighted-mean stopping + DT
+def findContradictionStochastic(df, th, p_feats):
+    """
+    Identify the most heterogeneous (cluster, action) pair
+    using normalized weighted transition heterogeneity.
+
+    Parameters
+    ----------
+    df : pd.DataFrame Current MRL dataframe.
+    th : float
+        Absolute stopping threshold.
+        Stop when the observation-weighted average transition
+        heterogeneity across all (cluster, action) groups is <= th.
+    p_feats : int
+        Number of state features.
+        
+    Returns
+    -------
+    c, a :
+        Selected cluster-action pair with the largest group-level
+        transition heterogeneity. Returns (-1, -1) if stopping.
+    global_clf :
+        Global DecisionTreeClassifier used to estimate
+        next-cluster probabilities.
+    max_score :
+        Maximum group-level normalized weighted heterogeneity:
+            max_g H_g
+    overall_score :
+        Observation-weighted average heterogeneity:
+            H_bar = sum_g n_g H_g / sum_g n_g
+    coherence_diagnostic :
+        Additional diagnostic statistics.
+    """
+
+    X = df[
+        (df["NEXT_CLUSTER"] != "None") &
+        (df["ACTION"] != "None")
+    ].copy()
+        
+    y_raw = X["NEXT_CLUSTER"]
+
+    y_encoder = LabelEncoder()
+    y = y_encoder.fit_transform(y_raw)
+
+    X_global = _make_global_X(X, p_feats)
+
+    global_clf = DecisionTreeClassifier(
+        max_depth=None,
+        min_samples_leaf=1,
+        random_state=0,
+    )
+
+    global_clf.fit(X_global, y)
+
+    
+    def score_group(g):
+        n_group = len(g)
+
+        # No transition heterogeneity if all observations transition to the same next cluster
+        if g["NEXT_CLUSTER"].nunique() < 2:
+            return pd.Series({
+                "score": 0.0,
+                "n_group": int(n_group),
+            })
+
+        X_g = _make_global_X(g, p_feats)
+
+        P_hat = global_clf.predict_proba(X_g)
+
+        y_g = y_encoder.transform(
+            g["NEXT_CLUSTER"]
+        )
+
+        # Number of observations transitioning to each next cluster
+        weights = np.bincount(
+            y_g,
+            minlength=P_hat.shape[1],
+        ).astype(float)
+
+        # Convert counts to empirical transition proportions
+        weights /= weights.sum()
+
+        # H_g = sum_j p_gj * std(P_hat_j)
+        score = np.sum(
+            np.std(P_hat, axis=0)
+            * weights
+        )
+
+        return pd.Series({
+            "score": float(score),
+            "n_group": int(n_group),
+        })
+
+    group_scores = (
+        X
+        .groupby(
+            ["CLUSTER", "ACTION"]
+        )
+        .apply(score_group)
+    )
+
+    # --------------------------------------------------
+    # Select criterion:
+    # largest group-level heterogeneity
+    # --------------------------------------------------
+    scores = group_scores["score"]
+
+    max_score = float(scores.max())
+
+    # --------------------------------------------------
+    # Stop criterion:
+    # observation-weighted overall heterogeneity
+    # --------------------------------------------------
+    group_sizes = group_scores["n_group"]
+
+    overall_score = float(
+        np.average(
+            scores,
+            weights=group_sizes,
+        )
+    )
+
+    should_stop = overall_score <= th
+
+    # --------------------------------------------------
+    # Diagnostics
+    # --------------------------------------------------
+    q90_score = float(
+        scores.quantile(0.90)
+    )
+
+    median_score = float(
+        scores.median()
+    )
+
+    coherence_diagnostic = {
+        "max_score": max_score,
+        "q90_score": q90_score,
+        "median_score": median_score,
+        "overall_score": overall_score,
+        "n_groups": len(group_scores),
+    }
+
+    print(
+        "overall weighted heterogeneity:",
+        overall_score,
+    )
+    print(
+        "absolute threshold:",
+        th,
+    )
+    print(
+        "max group heterogeneity:",
+        max_score,
+    )
+    print(
+        "q90:",
+        q90_score,
+    )
+    print(
+        "will stop:",
+        should_stop,
+    )
+
+    # --------------------------------------------------
+    # Stop
+    # --------------------------------------------------
+    if should_stop:
+        print(
+            "chosen:",
+            (-1, -1),
+        )
+
+        return (
+            -1,
+            -1,
+            global_clf,
+            max_score,
+            overall_score,
+            coherence_diagnostic,
+        )
+
+    # --------------------------------------------------
+    # Select worst group for splitting
+    # --------------------------------------------------
+    c, a = scores.idxmax()
+
+    print(
+        "chosen:",
+        (c, a),
+    )
+
+    return (
+        c,
+        a,
+        global_clf,
+        max_score,
+        overall_score,
+        coherence_diagnostic,
+    )
+
+
+
 
 
 def findContradiction(df, th, verbose=False):
@@ -1329,15 +1537,13 @@ def splitter(
                 c,
                 a,
                 global_clf,
-                max_std_reference,
-                current_max_std,
-                relative_max_std,
+                current_max_score,
+                overall_score,
                 coherence_diagnostic,
             ) = findContradictionStochastic(
                 df=df_new,
                 th=th,
                 p_feats=pfeatures,
-                max_std_reference=max_std_reference,
             )
 
             max_std_history.append(
@@ -1349,30 +1555,13 @@ def splitter(
             )
 
             coherence_history.append({
-                    "K": df_new["CLUSTER"].nunique(),
-                    "max_std": current_max_std,
-                    "relative_std": relative_max_std,
-                    "normalized_max":
-                        coherence_diagnostic[
-                            "normalized_max"
-                        ],
-                    "normalized_q90":
-                        coherence_diagnostic[
-                            "normalized_q90"
-                        ],
-                    "normalized_median":
-                        coherence_diagnostic[
-                            "normalized_median"
-                        ],
-                    "normalized_weighted_mean":
-                        coherence_diagnostic[
-                            "normalized_weighted_mean"
-                        ],
-                    "n_groups":
-                        coherence_diagnostic[
-                            "n_groups"
-                        ],
-                })
+                "K": K,
+                "max_score": current_max_score,
+                "overall_score": overall_score,
+                "q90_score": coherence_diagnostic["q90_score"],
+                "median_score": coherence_diagnostic["median_score"],
+                "n_groups": coherence_diagnostic["n_groups"],
+            })
             
         if verbose:
             print(f"Found contradiction in {time.time()-st}!")
