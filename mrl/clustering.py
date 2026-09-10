@@ -1516,8 +1516,6 @@ def splitter(
     split_bar = tqdm(range(max_k - k))
     split_bar.set_description("Splitting...")
 
-    max_std_reference = None
-    max_std_history = []
     coherence_history = []
     
     # Setting progress bar--------------
@@ -1546,16 +1544,9 @@ def splitter(
                 p_feats=pfeatures,
             )
 
-            max_std_history.append(
-                [
-                    df_new["CLUSTER"].nunique(),
-                    current_max_std,
-                    relative_max_std,
-                ]
-            )
-
+            
             coherence_history.append({
-                "K": K,
+                "K": df_new["CLUSTER"].nunique(),
                 "max_score": current_max_score,
                 "overall_score": overall_score,
                 "q90_score": coherence_diagnostic["q90_score"],
@@ -1821,7 +1812,6 @@ def splitter(
             opt_k,
             split_scores,
             None,
-            max_std_history,
             coherence_history,
         )
     return (
@@ -1833,7 +1823,6 @@ def splitter(
         opt_k,
         split_scores,
         training_error,
-        max_std_history,
         coherence_history,
     )
 
