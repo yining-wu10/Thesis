@@ -332,7 +332,6 @@ class MDP_model:
             opt_k,
             split_scores,
             stoc_training_error,
-            max_std_history,
             coherence_history,
         ) = splitter(
             df_init,
@@ -360,7 +359,6 @@ class MDP_model:
         self.training_error = training_error
         self.incoherences = df_incoherences
         self.split_scores = split_scores
-        self.max_std_history = max_std_history
         self.coherence_history = coherence_history
 
         # storing trained dataset and predict_cluster function, depending on
