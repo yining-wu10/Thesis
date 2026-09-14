@@ -832,7 +832,7 @@ def findContradictionStochastic(df, th, p_feats, max_std_reference=None):
 
 
 # Absolute weighted-mean stopping + DT
-def findContradictionStochastic(df, th, p_feats):
+def findContradictionStochastic(df, th, p_feats, classification, classifier_params):
     """
     Identify the most heterogeneous (cluster, action) pair
     using normalized weighted transition heterogeneity.
@@ -877,10 +877,9 @@ def findContradictionStochastic(df, th, p_feats):
 
     X_global = _make_global_X(X, p_feats)
 
-    global_clf = DecisionTreeClassifier(
-        max_depth=None,
-        min_samples_leaf=1,
-        random_state=0,
+    global_clf = parse_classifier(
+        classification,
+        classifier_params or {},
     )
 
     global_clf.fit(X_global, y)
@@ -1120,33 +1119,33 @@ def multimode(data):
 
 
 def parse_classifier(
-    classification, split_classifier_params  # string: classification aglo
+    classification, classifier_params  # string: classification aglo
 ):
     """
     Get classifier based on the specified type.
 
     Parameters:
     classification (str): Classification algorithm.
-    split_classifier_params (dict): Classifier parameters.
+    classifier_params (dict): Classifier parameters.
 
     Returns:
     Classifier: Initialized classifier.
     """
 
     if classification == "LogisticRegression":
-        return LogisticRegression(**split_classifier_params)
+        return LogisticRegression(**classifier_params)
     if classification == "LogisticRegressionCV":
-        return LogisticRegressionCV(**split_classifier_params)
+        return LogisticRegressionCV(**classifier_params)
     if classification == "DecisionTreeClassifier":
-        return DecisionTreeClassifier(**split_classifier_params)
+        return DecisionTreeClassifier(**classifier_params)
 
     if classification == "RandomForestClassifier":
-        return RandomForestClassifier(**split_classifier_params)
+        return RandomForestClassifier(**classifier_params)
 
     if classification == "MLPClassifier":
-        return MLPClassifier(**split_classifier_params)
+        return MLPClassifier(**classifier_params)
     if classification == "AdaBoostClassifier":
-        return AdaBoostClassifier(**split_classifier_params)
+        return AdaBoostClassifier(**classifier_params)
     raise ValueError("Incorrect Classifier Type")
 
 
@@ -1216,7 +1215,7 @@ def splitStochastic(
 
 # global classifier
 def splitStochastic(
-    df, i, a, p_feats, k, nsplits, classification, split_classifier_params, global_clf
+    df, i, a, p_feats, k, nsplits, global_clf, random_state=0,
 ):
     X = df[
         (df["CLUSTER"] == i) &
@@ -1231,11 +1230,9 @@ def splitStochastic(
 
     y_preds = global_clf.predict_proba(X_pred)
 
-    seed = split_classifier_params.get("random_state", 0)
-
     clusterer = KMeans(
         n_clusters=nsplits,
-        random_state=seed,
+        random_state=random_state,
     )
 
     target_groups = clusterer.fit_predict(y_preds)
@@ -1542,6 +1539,8 @@ def splitter(
                 df=df_new,
                 th=th,
                 p_feats=pfeatures,
+                classification=classification,
+                classifier_params=split_classifier_params,
             )
 
             
@@ -1602,8 +1601,6 @@ def splitter(
                     pfeatures,
                     nc,
                     2,
-                    classification,
-                    split_classifier_params,
                     global_clf,
                 )
 
